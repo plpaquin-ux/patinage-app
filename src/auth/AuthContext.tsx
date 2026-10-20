@@ -123,11 +123,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const createCompte = useCallback(
     async (nom: string) => {
-      const { data, error } = await supabase.from('compte').insert({ nom }).select('id').single()
-      if (error) return error.message
-      const id = (data as { id: string }).id
-      const { error: e2 } = await supabase.rpc('fn_amorcer_compte', { p_compte_id: id })
-      if (e2) return e2.message
+      // Fonction atomique côté serveur : compte + membre propriétaire + amorçage (distances, circuits)
+      const { data, error } = await supabase.rpc('fn_creer_compte', { p_nom: nom })
+      if (error) return traduireErreur(error.message)
+      const id = data as string
       await resetPullMarkers()
       setCompteId(id)
       setCompteIdState(id)
