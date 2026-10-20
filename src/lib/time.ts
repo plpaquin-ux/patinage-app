@@ -73,3 +73,24 @@ export function fromLocalInput(v: string): string | null {
 export function retenu(c: { temps_officiel_ms: number | null; temps_ajuste_ms: number | null; temps_calcule_ms: number | null }) {
   return c.temps_officiel_ms ?? c.temps_ajuste_ms ?? c.temps_calcule_ms ?? null
 }
+
+/** Longueur du tour effective : compétition > circuit > piste. */
+export function longueurPiste(
+  competition?: { longueur_piste_m: number | null } | null,
+  circuit?: { longueur_piste_m: number | null } | null,
+  piste?: { longueur_m: number | null } | null,
+): number | null {
+  return competition?.longueur_piste_m ?? circuit?.longueur_piste_m ?? piste?.longueur_m ?? null
+}
+
+/** Nombre de tours attendus (arrondi au supérieur) : metres / longueur, sinon défaut de la distance. */
+export function nbToursAttendus(metres: number | null | undefined, longueur: number | null | undefined, defaut?: number | null): number | null {
+  if (metres && longueur && longueur > 0) return Math.ceil(metres / longueur - 1e-9)
+  if (defaut != null) return Math.ceil(defaut)
+  return null
+}
+
+export function fmtLongueur(m: number | null | undefined): string {
+  if (m == null) return '—'
+  return `${Number.isInteger(m) ? m : m.toFixed(2).replace(/\.?0+$/, '')} m`
+}

@@ -9,6 +9,7 @@ export interface StopwatchContext {
   athleteId: string
   distanceId: string | null
   nbToursPrevus: number | null
+  longueurPisteM: number | null
   courseId: string | null
   seanceId: string | null
   label: string

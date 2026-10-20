@@ -6,7 +6,7 @@ import { TimeInput } from '../components/TimeInput'
 import { db } from '../lib/db'
 import { useAthlete, useChrono, useTours } from '../lib/hooks'
 import { create, softDelete, update } from '../lib/repo'
-import { fmtDate, fmtDelta, fmtMs, retenu } from '../lib/time'
+import { fmtDate, fmtDelta, fmtLongueur, fmtMs, retenu } from '../lib/time'
 import { LIBELLES, mancheLabel, type Chrono, type Participation, type StatutResultat, type Tour, type TypeCouloir } from '../lib/types'
 
 export default function ChronoEditPage() {
@@ -133,6 +133,7 @@ export default function ChronoEditPage() {
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
           <span className="badge">{chrono.source === 'chrono_app' ? 'Chrono app' : chrono.source === 'saisie_manuelle' ? 'Saisie manuelle' : 'Import'}</span>
+          {chrono.longueur_piste_m != null && <span className="badge">tour de {fmtLongueur(chrono.longueur_piste_m)}</span>}
           {chrono.chrono_incomplet && <span className="badge warn">Tours incomplets</span>}
           {chrono.temps_ajuste_ms != null && <span className="badge accent">Total ajusté</span>}
           {chrono.temps_officiel_ms != null && <span className="badge ok">Officiel</span>}
@@ -181,18 +182,29 @@ export default function ChronoEditPage() {
         <Field label="Temps officiel" hint={ecart != null ? `Écart avec ton chrono : ${fmtDelta(ecart)}` : 'Le temps des officiels prime sur les autres.'}>
           <TimeInput value={chrono.temps_officiel_ms} onChange={(ms) => patchChrono({ temps_officiel_ms: ms })} />
         </Field>
-        <Field label="Tours attendus">
-          <input
-            className="mono"
-            inputMode="numeric"
-            defaultValue={chrono.nb_tours_prevus ?? ''}
-            onBlur={(e) => {
-              const v = e.target.value.trim()
-              const n = v ? Number(v) : null
-              patchChrono({ nb_tours_prevus: n, chrono_incomplet: n != null ? tours.length !== n : false })
-            }}
-          />
-        </Field>
+        <div className="grid2">
+          <Field label="Tours attendus">
+            <input
+              className="mono"
+              inputMode="numeric"
+              defaultValue={chrono.nb_tours_prevus ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim()
+                const n = v ? Number(v) : null
+                patchChrono({ nb_tours_prevus: n, chrono_incomplet: n != null ? tours.length !== n : false })
+              }}
+            />
+          </Field>
+          <Field label="Longueur du tour (m)" hint="Figée au moment de la course">
+            <input
+              className="mono"
+              inputMode="decimal"
+              defaultValue={chrono.longueur_piste_m ?? ''}
+              placeholder="100 / 111.12"
+              onBlur={(e) => patchChrono({ longueur_piste_m: e.target.value.trim() ? Number(e.target.value.replace(',', '.')) || null : null })}
+            />
+          </Field>
+        </div>
         <label className="check">
           <input type="checkbox" checked={chrono.chrono_incomplet} onChange={(e) => patchChrono({ chrono_incomplet: e.target.checked })} />
           Chrono incomplet (tour manqué, départ tardif…)

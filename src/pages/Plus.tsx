@@ -5,6 +5,7 @@ import { Empty, Field, Page } from '../components/Layout'
 import { useAthletes, useCircuits, useDistances, usePistes, useSaisons } from '../lib/hooks'
 import { create, softDelete, update } from '../lib/repo'
 import { resetPullMarkers, syncNow } from '../lib/sync'
+import { fmtLongueur } from '../lib/time'
 import { LIBELLES, type TypeCourse, type TypePiste } from '../lib/types'
 import { NumInput } from './ChronoEdit'
 
@@ -198,20 +199,38 @@ export function CircuitsPage() {
   const circuits = useCircuits()
   const [nom, setNom] = useState('')
   const [type, setType] = useState<TypePiste | ''>('')
+  const [longueur, setLongueur] = useState('')
   async function add(e: FormEvent) {
     e.preventDefault()
-    await create('circuit', { nom: nom.trim(), type_piste: type || null, organisme: null, commentaire: null })
+    await create('circuit', {
+      nom: nom.trim(),
+      type_piste: type || null,
+      organisme: null,
+      longueur_piste_m: longueur.trim() ? Number(longueur.replace(',', '.')) || null : null,
+      commentaire: null,
+    })
     setNom('')
+    setLongueur('')
   }
   return (
     <Page title="Circuits" back="/plus">
+      <p className="muted">La longueur du tour définit le nombre de tours par distance (ex. 1000 m : 10 tours à 100 m, 9 tours à 111,12 m). Les chronos passés conservent la longueur en vigueur au moment de la course.</p>
       <ul className="list">
         {circuits?.map((c) => (
           <li key={c.id} className="row">
             <div className="grow">
               <div className="title">{c.nom}</div>
-              <div className="sub">{[c.type_piste ? LIBELLES.type_piste[c.type_piste] : null, c.organisme].filter(Boolean).join(' · ')}</div>
+              <div className="sub">{[c.type_piste ? LIBELLES.type_piste[c.type_piste] : null, c.organisme, `tour de ${fmtLongueur(c.longueur_piste_m)}`].filter(Boolean).join(' · ')}</div>
             </div>
+            <input
+              className="mono"
+              inputMode="decimal"
+              style={{ width: 84, minHeight: 40 }}
+              defaultValue={c.longueur_piste_m ?? ''}
+              placeholder="m"
+              onBlur={(e) => update('circuit', c.id, { longueur_piste_m: e.target.value.trim() ? Number(e.target.value.replace(',', '.')) || null : null })}
+              aria-label="Longueur du tour (m)"
+            />
             <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${c.nom} ?`) && softDelete('circuit', c.id)}>
               ✕
             </button>
@@ -228,6 +247,9 @@ export function CircuitsPage() {
             <option value="longue_piste">Longue piste</option>
           </select>
         </div>
+        <Field label="Longueur du tour (m)">
+          <input className="mono" inputMode="decimal" value={longueur} onChange={(e) => setLongueur(e.target.value)} placeholder="100 ou 111.12" />
+        </Field>
         <button className="btn-primary btn-block" style={{ marginTop: 10 }}>
           Ajouter
         </button>
@@ -256,7 +278,7 @@ export function DistancesPage() {
   }
   return (
     <Page title="Distances" back="/plus">
-      <p className="muted">Le nombre de tours sert à pré-remplir le chrono et à signaler un tour manqué.</p>
+      <p className="muted">Le nombre de tours est normalement calculé à partir de la longueur du tour (circuit / compétition). La valeur ici ne sert que si la longueur est inconnue.</p>
       <table className="table">
         <thead>
           <tr>

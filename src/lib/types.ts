@@ -64,6 +64,8 @@ export interface Circuit extends BaseRow {
   nom: string
   type_piste: TypePiste | null
   organisme: string | null
+  /** Longueur d'un tour sur ce circuit (100 = InterRégional CP, 111.12 = provincial CP). */
+  longueur_piste_m: number | null
   commentaire: string | null
 }
 
@@ -103,6 +105,8 @@ export interface Competition extends BaseRow {
   date_debut: string
   date_fin: string | null
   niveau: string | null
+  /** Surcharge de la longueur du tour (sinon circuit, sinon piste). */
+  longueur_piste_m: number | null
   url_resultats: string | null
   commentaire: string | null
 }
@@ -170,6 +174,8 @@ export interface Chrono extends BaseRow {
   debute_a: string | null
   termine_a: string | null
   nb_tours_prevus: number | null
+  /** Longueur du tour au moment de la capture — figée, l'historique ne bouge pas. */
+  longueur_piste_m: number | null
   nb_tours_enregistres: number
   temps_calcule_ms: number | null
   temps_ajuste_ms: number | null

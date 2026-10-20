@@ -5,7 +5,7 @@ import { Empty, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import { getDefaultAthleteId, useAthletes, useDistances } from '../lib/hooks'
 import { alive } from '../lib/repo'
-import { fmtDate, fmtDelta, fmtMs, retenu } from '../lib/time'
+import { fmtDate, fmtDelta, fmtLongueur, fmtMs, longueurPiste, retenu } from '../lib/time'
 import { LIBELLES, mancheLabel, type Chrono, type Course, type Participation, type TypePiste } from '../lib/types'
 
 interface Point {
@@ -16,6 +16,7 @@ interface Point {
   piste?: string
   date: string
   temps: number
+  longueur: number | null
 }
 
 export default function HistoriquePage() {
@@ -24,6 +25,7 @@ export default function HistoriquePage() {
   const [typePiste, setTypePiste] = useState<TypePiste>('courte_piste')
   const [distanceId, setDistanceId] = useState('')
   const [inclureEntrainement, setInclureEntrainement] = useState(false)
+  const [longueurFiltre, setLongueurFiltre] = useState<number | 'toutes'>('toutes')
   const distances = useDistances(typePiste)
 
   useEffect(() => {
@@ -56,14 +58,18 @@ export default function HistoriquePage() {
       const epreuve = course ? await db.epreuve.get(course.epreuve_id) : undefined
       const comp = epreuve ? await db.competition.get(epreuve.competition_id) : undefined
       const piste = comp?.piste_id ? await db.piste.get(comp.piste_id) : undefined
+      const circuit = comp?.circuit_id ? await db.circuit.get(comp.circuit_id) : undefined
       const date = course?.debutee_a ?? course?.prevue_a ?? comp?.date_debut ?? ch.debute_a ?? ch.created_at
-      out.push({ chrono: ch, part, course, competition: comp?.nom, piste: piste?.nom, date, temps: t })
+      const longueur = ch.longueur_piste_m ?? longueurPiste(comp, circuit, piste)
+      out.push({ chrono: ch, part, course, competition: comp?.nom, piste: piste?.nom, date, temps: t, longueur })
     }
     return out.sort((a, b) => a.date.localeCompare(b.date))
   }, [chronos, distanceId, inclureEntrainement])
 
-  const best = points && points.length ? points.reduce((m, p) => (p.temps < m.temps ? p : m)) : null
-  const dernier = points?.at(-1)
+  const longueurs = useMemo(() => Array.from(new Set((points ?? []).map((p) => p.longueur).filter((l): l is number => l != null))).sort((a, b) => a - b), [points])
+  const pts = useMemo(() => (longueurFiltre === 'toutes' ? points : points?.filter((p) => p.longueur === longueurFiltre)), [points, longueurFiltre])
+  const best = pts && pts.length ? pts.reduce((m, p) => (p.temps < m.temps ? p : m)) : null
+  const dernier = pts?.at(-1)
   const distance = distances?.find((d) => d.id === distanceId)
 
   return (
@@ -92,10 +98,25 @@ export default function HistoriquePage() {
               </button>
             ))}
           </div>
+          {longueurs.length > 1 && (
+            <div className="segmented">
+              <button className={longueurFiltre === 'toutes' ? 'active' : ''} onClick={() => setLongueurFiltre('toutes')}>
+                Toutes longueurs
+              </button>
+              {longueurs.map((l) => (
+                <button key={l} className={longueurFiltre === l ? 'active' : ''} onClick={() => setLongueurFiltre(l)}>
+                  Tour de {fmtLongueur(l)}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="check" style={{ marginBottom: 8 }}>
             <input type="checkbox" checked={inclureEntrainement} onChange={(e) => setInclureEntrainement(e.target.checked)} />
             Inclure les entraînements
           </label>
+          {longueurFiltre === 'toutes' && longueurs.length > 1 && (
+            <div className="notice">Attention : des tours de {longueurs.map(fmtLongueur).join(' et ')} sont mélangés ; un même 1000 m n'a pas le même nombre de tours. Filtre par longueur pour comparer à armes égales.</div>
+          )}
 
           {best && dernier && (
             <div className="grid2">
@@ -119,10 +140,10 @@ export default function HistoriquePage() {
             </div>
           )}
 
-          {points && points.length >= 2 && (
+          {pts && pts.length >= 2 && (
             <div className="card" style={{ marginTop: 12 }}>
-              <h3>Évolution · {distance?.libelle}</h3>
-              <Chart points={points} />
+              <h3>Évolution · {distance?.libelle}{longueurFiltre !== 'toutes' ? ` · tour de ${fmtLongueur(longueurFiltre)}` : ''}</h3>
+              <Chart points={pts} />
               <small>Temps retenu par course (officiel, sinon ajusté, sinon calculé). Touche un point pour les détails.</small>
             </div>
           )}
@@ -136,7 +157,7 @@ export default function HistoriquePage() {
               </tr>
             </thead>
             <tbody>
-              {[...(points ?? [])].reverse().map((p) => (
+              {[...(pts ?? [])].reverse().map((p) => (
                 <tr key={p.chrono.id}>
                   <td>
                     <Link to={`/chrono/${p.chrono.id}`}>{fmtDate(p.date)}</Link>
@@ -150,10 +171,11 @@ export default function HistoriquePage() {
                           {mancheLabel(p.course)}
                           {p.part?.rang_officiel ? ` · ${p.part.rang_officiel}ᵉ` : ''}
                           {p.piste ? ` · ${p.piste}` : ''}
+                          {p.longueur != null ? ` · tour de ${fmtLongueur(p.longueur)}` : ''}
                         </small>
                       </>
                     ) : (
-                      <small>Entraînement</small>
+                      <small>Entraînement{p.longueur != null ? ` · tour de ${fmtLongueur(p.longueur)}` : ''}</small>
                     )}
                   </td>
                   <td className="num" style={{ color: p === best ? 'var(--ok)' : undefined, fontWeight: 600 }}>

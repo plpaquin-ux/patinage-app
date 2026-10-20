@@ -6,15 +6,17 @@ import {
   getDefaultAthleteId,
   setDefaultAthleteId,
   useAthletes,
+  useCircuits,
   useCompetitions,
   useCourses,
   useDistances,
   useEpreuves,
+  usePistes,
   useSeances,
 } from '../lib/hooks'
 import { create, update } from '../lib/repo'
 import { useStopwatch, type StopwatchContext } from '../lib/stopwatch'
-import { fmtMs, todayIsoDate } from '../lib/time'
+import { fmtLongueur, fmtMs, longueurPiste, nbToursAttendus, todayIsoDate } from '../lib/time'
 import { mancheLabel, type Distance } from '../lib/types'
 
 export default function ChronoPage() {
@@ -39,6 +41,7 @@ export default function ChronoPage() {
         debute_a: new Date(state.startedAt).toISOString(),
         termine_a: new Date(state.stoppedAt).toISOString(),
         nb_tours_prevus: nbPrevus,
+        longueur_piste_m: ctx.longueurPisteM,
         nb_tours_enregistres: laps.length,
         temps_calcule_ms: total,
         temps_ajuste_ms: null,
@@ -191,6 +194,9 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
   const [seanceId, setSeanceId] = useState(params.get('seance') ?? '')
   const [distanceId, setDistanceId] = useState('')
   const [nbTours, setNbTours] = useState<string>('')
+  const [longueur, setLongueur] = useState<string>(localStorage.getItem('patinage.longueur_tour') ?? '100')
+  const circuits = useCircuits()
+  const pistes = usePistes()
 
   const competitions = useCompetitions()
   const epreuves = useEpreuves(competitionId || undefined)
@@ -226,9 +232,21 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
   }, [mode, epreuveId, epreuves])
 
   const distance: Distance | undefined = useMemo(() => distances?.find((d) => d.id === distanceId), [distances, distanceId])
+
+  // Longueur du tour : compétition > circuit > piste (compétition) ; saisie libre (entraînement)
   useEffect(() => {
-    if (distance?.nb_tours_defaut != null) setNbTours(String(Math.ceil(distance.nb_tours_defaut)))
-  }, [distance])
+    if (mode !== 'competition' || !competitionId) return
+    const comp = competitions?.find((c) => c.id === competitionId)
+    const l = longueurPiste(comp, circuits?.find((c) => c.id === comp?.circuit_id), pistes?.find((p) => p.id === comp?.piste_id))
+    if (l != null) setLongueur(String(l))
+  }, [mode, competitionId, competitions, circuits, pistes])
+
+  // Tours attendus = distance / longueur du tour (sinon défaut de la distance)
+  useEffect(() => {
+    const l = Number(longueur.replace(',', '.'))
+    const n = nbToursAttendus(distance?.metres, Number.isFinite(l) && l > 0 ? l : null, distance?.nb_tours_defaut)
+    setNbTours(n != null ? String(n) : '')
+  }, [distance, longueur])
 
   const athlete = athletes?.find((a) => a.id === athleteId)
   const ready = !!athleteId && (mode === 'entrainement' ? true : !!courseId)
@@ -236,6 +254,9 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
   async function go() {
     if (!athlete) return
     setDefaultAthleteId(athlete.id)
+    const l = Number(longueur.replace(',', '.'))
+    const longueurPisteM = Number.isFinite(l) && l > 0 ? l : null
+    if (longueurPisteM) localStorage.setItem('patinage.longueur_tour', String(longueurPisteM))
     let sid: string | null = null
     let label = athlete.prenom
     if (mode === 'entrainement') {
@@ -261,6 +282,7 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
       athleteId: athlete.id,
       distanceId: distanceId || null,
       nbToursPrevus: nbTours ? Number(nbTours) : null,
+      longueurPisteM,
       courseId: mode === 'competition' ? courseId : null,
       seanceId: sid,
       label,
@@ -375,9 +397,14 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
         </>
       )}
 
-      <Field label="Nombre de tours attendus" hint="Sert à signaler un tour manqué. Laisse vide si inconnu.">
-        <input className="mono" inputMode="numeric" value={nbTours} onChange={(e) => setNbTours(e.target.value.replace(/\D/g, ''))} placeholder="ex. 5" />
-      </Field>
+      <div className="grid2">
+        <Field label="Longueur du tour (m)" hint={mode === 'competition' ? 'Déduite du circuit / de la compétition.' : '100 m InterRégional, 111,12 m provincial.'}>
+          <input className="mono" inputMode="decimal" value={longueur} onChange={(e) => setLongueur(e.target.value)} placeholder="100" />
+        </Field>
+        <Field label="Tours attendus" hint={distance && longueur ? `${distance.metres} m ÷ ${fmtLongueur(Number(longueur.replace(',', '.')) || null)}` : 'Signale un tour manqué.'}>
+          <input className="mono" inputMode="numeric" value={nbTours} onChange={(e) => setNbTours(e.target.value.replace(/\D/g, ''))} placeholder="ex. 5" />
+        </Field>
+      </div>
 
       <button className="btn-primary btn-block bigbtn" disabled={!ready} onClick={go}>
         Préparer le chrono

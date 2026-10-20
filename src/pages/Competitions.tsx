@@ -16,7 +16,7 @@ import {
   useSaisons,
 } from '../lib/hooks'
 import { alive, create, softDelete, update } from '../lib/repo'
-import { fmtDate, fmtMs, retenu, todayIsoDate } from '../lib/time'
+import { fmtDate, fmtLongueur, fmtMs, nbToursAttendus, retenu, todayIsoDate } from '../lib/time'
 import { LIBELLES, mancheLabel, type Competition, type TypeCourse } from '../lib/types'
 import { NumInput } from './ChronoEdit'
 
@@ -78,12 +78,21 @@ export function CompetitionFormPage() {
   const circuits = useCircuits()
   const saisons = useSaisons()
   const athletes = useAthletes()
-  const [f, setF] = useState<Partial<Competition>>({ nom: '', date_debut: todayIsoDate(), date_fin: null, niveau: null })
+  const [f, setF] = useState<Partial<Competition>>({ nom: '', date_debut: todayIsoDate(), date_fin: null, niveau: null, longueur_piste_m: null })
+  const [longueurTxt, setLongueurTxt] = useState('')
   const [inscrire, setInscrire] = useState<string[]>([])
 
   useEffect(() => {
-    if (existing) setF(existing)
+    if (existing) {
+      setF(existing)
+      setLongueurTxt(existing.longueur_piste_m != null ? String(existing.longueur_piste_m) : '')
+    }
   }, [existing])
+
+  // Longueur du tour proposée : circuit > piste (seulement si l'usager n'a rien saisi)
+  const circuitSel = circuits?.find((c) => c.id === f.circuit_id)
+  const pisteSel = pistes?.find((p) => p.id === f.piste_id)
+  const longueurSuggeree = circuitSel?.longueur_piste_m ?? pisteSel?.longueur_m ?? null
   useEffect(() => {
     if (!id && athletes && inscrire.length === 0) setInscrire(athletes.map((a) => a.id))
   }, [athletes, id, inscrire.length])
@@ -105,6 +114,7 @@ export function CompetitionFormPage() {
       circuit_id: f.circuit_id ?? null,
       piste_id: f.piste_id ?? null,
       niveau: f.niveau || null,
+      longueur_piste_m: longueurTxt.trim() ? Number(longueurTxt.replace(',', '.')) || null : null,
       url_resultats: f.url_resultats || null,
       commentaire: f.commentaire || null,
     }
@@ -178,6 +188,16 @@ export function CompetitionFormPage() {
             <input value={f.niveau ?? ''} onChange={(e) => setF({ ...f, niveau: e.target.value })} placeholder="régional, provincial…" />
           </Field>
         </div>
+        <Field
+          label="Longueur du tour (m)"
+          hint={
+            longueurSuggeree != null
+              ? `Laisse vide pour utiliser ${fmtLongueur(longueurSuggeree)} (${circuitSel?.longueur_piste_m != null ? 'circuit' : 'piste'}). Ex. 1000 m = ${nbToursAttendus(1000, Number(longueurTxt.replace(',', '.')) || longueurSuggeree)} tours.`
+              : 'Ex. 100 m en InterRégional, 111,12 m au provincial. Sinon, définis-la sur le circuit.'
+          }
+        >
+          <input className="mono" inputMode="decimal" value={longueurTxt} onChange={(e) => setLongueurTxt(e.target.value)} placeholder={longueurSuggeree != null ? String(longueurSuggeree) : '100'} />
+        </Field>
         <Field label="Lien vers les résultats officiels">
           <input type="url" value={f.url_resultats ?? ''} onChange={(e) => setF({ ...f, url_resultats: e.target.value })} placeholder="https://" />
         </Field>
@@ -274,6 +294,9 @@ export function CompetitionDetailPage() {
             .filter(Boolean)
             .join(' · ')}
         </small>
+        <div>
+          <span className="badge accent">tour de {fmtLongueur(comp.longueur_piste_m ?? circuit?.longueur_piste_m ?? piste?.longueur_m)}</span>
+        </div>
         {comp.url_resultats && (
           <div>
             <a href={comp.url_resultats} target="_blank" rel="noreferrer">
@@ -305,6 +328,7 @@ export function CompetitionDetailPage() {
         {resume?.map(({ epreuve, courses, nbParts, best }) => {
           const d = allDistances?.find((x) => x.id === epreuve.distance_id)
           const g = groupes?.find((x) => x.id === epreuve.groupe_id)
+          const nbT = nbToursAttendus(d?.metres, comp.longueur_piste_m ?? circuit?.longueur_piste_m ?? piste?.longueur_m, d?.nb_tours_defaut)
           return (
             <li key={epreuve.id}>
               <Link className="row" to={`/epreuves/${epreuve.id}`}>
@@ -312,6 +336,7 @@ export function CompetitionDetailPage() {
                   <div className="title">
                     {epreuve.nom ?? d?.libelle ?? 'Épreuve'}
                     {epreuve.type_course !== 'individuelle' ? ` · ${LIBELLES.type_course[epreuve.type_course]}` : ''}
+                    {nbT ? ` · ${nbT} tours` : ''}
                   </div>
                   <div className="sub">
                     {courses.length === 0 ? 'Aucune manche' : courses.map(mancheLabel).join(' → ')}

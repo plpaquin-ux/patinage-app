@@ -5,7 +5,7 @@ import { Empty, Field, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import { useAthletes, useCourse, useCourses, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
 import { alive, create, softDelete, update } from '../lib/repo'
-import { fmtDate, fmtMs, fromLocalInput, retenu, toLocalInput } from '../lib/time'
+import { fmtDate, fmtLongueur, fmtMs, fromLocalInput, longueurPiste, nbToursAttendus, retenu, toLocalInput } from '../lib/time'
 import { LIBELLES, mancheLabel, type TypeManche } from '../lib/types'
 import { NumInput } from './ChronoEdit'
 
@@ -15,8 +15,12 @@ export function EpreuvePage() {
   const nav = useNavigate()
   const epreuve = useEpreuve(id)
   const competition = useLiveQuery(() => (epreuve ? db.competition.get(epreuve.competition_id) : undefined), [epreuve?.competition_id])
+  const circuitE = useLiveQuery(() => (competition?.circuit_id ? db.circuit.get(competition.circuit_id) : undefined), [competition?.circuit_id])
+  const pisteE = useLiveQuery(() => (competition?.piste_id ? db.piste.get(competition.piste_id) : undefined), [competition?.piste_id])
   const distance = useLiveQuery(() => (epreuve ? db.distance.get(epreuve.distance_id) : undefined), [epreuve?.distance_id])
   const courses = useCourses(id)
+  const longueurE = longueurPiste(competition, circuitE, pisteE)
+  const nbToursE = nbToursAttendus(distance?.metres, longueurE, distance?.nb_tours_defaut)
   const [showForm, setShowForm] = useState(false)
 
   const resume = useLiveQuery(async () => {
@@ -54,7 +58,7 @@ export function EpreuvePage() {
         <div style={{ fontWeight: 700 }}>{competition?.nom}</div>
         <small>
           {distance?.libelle} · {LIBELLES.type_course[epreuve.type_course]}
-          {distance?.nb_tours_defaut ? ` · ${distance.nb_tours_defaut} tours` : ''}
+          {nbToursE ? ` · ${nbToursE} tours de ${fmtLongueur(longueurE)}` : ''}
         </small>
       </div>
 
@@ -167,6 +171,7 @@ export function CoursePage() {
   const epreuve = useEpreuve(course?.epreuve_id)
   const competition = useLiveQuery(() => (epreuve ? db.competition.get(epreuve.competition_id) : undefined), [epreuve?.competition_id])
   const piste = useLiveQuery(() => (competition?.piste_id ? db.piste.get(competition.piste_id) : undefined), [competition?.piste_id])
+  const circuit = useLiveQuery(() => (competition?.circuit_id ? db.circuit.get(competition.circuit_id) : undefined), [competition?.circuit_id])
   const distance = useLiveQuery(() => (epreuve ? db.distance.get(epreuve.distance_id) : undefined), [epreuve?.distance_id])
   const participations = useParticipations(id)
   const inscriptions = useInscriptions(epreuve?.competition_id)
@@ -199,7 +204,8 @@ export function CoursePage() {
       source: 'saisie_manuelle',
       debute_a: course!.debutee_a ?? course!.prevue_a ?? null,
       termine_a: null,
-      nb_tours_prevus: distance?.nb_tours_defaut != null ? Math.ceil(distance.nb_tours_defaut) : null,
+      nb_tours_prevus: nbToursAttendus(distance?.metres, longueurPiste(competition, circuit, piste), distance?.nb_tours_defaut),
+      longueur_piste_m: longueurPiste(competition, circuit, piste),
       nb_tours_enregistres: 0,
       temps_calcule_ms: null,
       temps_ajuste_ms: null,
