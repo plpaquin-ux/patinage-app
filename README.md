@@ -20,8 +20,8 @@ npm run dev
 ## Déploiement
 
 Pousser sur `main` déclenche la construction et la publication sur GitHub Pages.
-Variables de dépôt à définir (Settings → Secrets and variables → Actions → Variables) :
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`.
+L'URL et la clé publishable Supabase sont dans le workflow (valeurs par défaut) ; elles peuvent être
+surchargées par des variables de dépôt `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
 ## Modèle de données
 

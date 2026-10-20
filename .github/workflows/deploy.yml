@@ -26,9 +26,13 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Clé « publishable » : publique par conception (elle est livrée au navigateur) ; la sécurité repose sur le RLS.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://lzogxnoagzrcabariqix.supabase.co' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_GNd4ucjuyTeb-4JJUKk9fA_fdnAox64' }}
           VITE_BASE: /${{ github.event.repository.name }}/
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
