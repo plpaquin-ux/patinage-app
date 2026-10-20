@@ -141,8 +141,16 @@ export function useStopwatch() {
     vibrate([40, 60, 40])
     commit({ ...state, stoppedAt: Date.now() })
   }, [state, running, commit])
+  /** Fusionne le tour n avec le suivant (retire la marque qui les sépare). Chrono arrêté seulement. */
+  const mergeLap = useCallback(
+    (n: number) => {
+      if (!state.stoppedAt || n < 1 || n > state.marks.length) return
+      commit({ ...state, marks: state.marks.filter((_, i) => i !== n - 1) })
+    },
+    [state, commit],
+  )
   const reset = useCallback(() => commit(EMPTY), [commit])
 
   const computed = computeLaps(state, now)
-  return { state, running, stopped: !!state.stoppedAt, ...computed, arm, start, lap, undoLap, stop, reset }
+  return { state, running, stopped: !!state.stoppedAt, ...computed, arm, start, lap, undoLap, mergeLap, stop, reset }
 }

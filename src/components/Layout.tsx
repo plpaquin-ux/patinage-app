@@ -29,12 +29,14 @@ export function Page({
   children,
   right,
   full,
+  className,
 }: {
   title: string
   back?: string | true
   children: ReactNode
   right?: ReactNode
   full?: boolean
+  className?: string
 }) {
   const nav = useNavigate()
   return (
@@ -49,7 +51,7 @@ export function Page({
         {right}
         <SyncPill />
       </header>
-      <main className={`content${full ? ' full' : ''}`}>{children}</main>
+      <main className={`content${full ? ' full' : ''}${className ? ` ${className}` : ''}`}>{children}</main>
       <BottomNav />
     </div>
   )

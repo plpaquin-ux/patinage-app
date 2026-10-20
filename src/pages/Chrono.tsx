@@ -102,7 +102,7 @@ export default function ChronoPage() {
   const toursAttendus = ctx.nbToursPrevus
 
   return (
-    <Page title={ctx.label} full>
+    <Page title={ctx.label} full className="chrono">
       <div className="chrono-screen">
         <div className="chrono-display">
           <div className="chrono-main">{fmtMs(total, { decimals: sw.stopped ? 3 : 2, forceMinutes: total >= 60000 })}</div>
@@ -127,19 +127,6 @@ export default function ChronoPage() {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="laps">
-          {laps.length === 0 && (
-            <Empty>{sw.running ? 'Appuie sur TOUR à chaque passage de la ligne.' : 'Prêt. Appuie sur DÉPART au signal.'}</Empty>
-          )}
-          {[...laps].reverse().map((l) => (
-            <div key={l.n} className={`lap${l.ms === best ? ' best' : ''}${l.ms === worst ? ' worst' : ''}`}>
-              <span className="n">T{l.n}</span>
-              <span className="t">{fmtMs(l.ms, { decimals: 2 })}</span>
-              <span className="c">{fmtMs(l.cumul, { decimals: 2 })}</span>
-            </div>
-          ))}
         </div>
 
         {!sw.running && !sw.stopped && (
@@ -174,8 +161,28 @@ export default function ChronoPage() {
             <button className="btn-danger" onClick={() => confirm('Abandonner ce chrono ?') && sw.reset()}>
               Abandonner
             </button>
+            {laps.length > 1 && (
+              <small style={{ gridColumn: '1 / -1', textAlign: 'center' }}>Appui de trop sur TOUR ? Fusionne deux tours ci-dessous, tu pourras aussi le faire à la révision.</small>
+            )}
           </div>
         )}
+        <div className="laps">
+          {laps.length === 0 && (
+            <Empty>{sw.running ? 'Appuie sur TOUR à chaque passage de la ligne.' : 'Prêt. Appuie sur DÉPART au signal.'}</Empty>
+          )}
+          {[...laps].reverse().map((l) => (
+            <div key={l.n} className={`lap${sw.stopped ? ' editable' : ''}${l.ms === best ? ' best' : ''}${l.ms === worst ? ' worst' : ''}`}>
+              <span className="n">T{l.n}</span>
+              <span className="t">{fmtMs(l.ms, { decimals: 2 })}</span>
+              <span className="c">{fmtMs(l.cumul, { decimals: 2 })}</span>
+              {sw.stopped && l.n < laps.length && (
+                <button className="btn-ghost btn-sm merge" onClick={() => sw.mergeLap(l.n)} title={`Fusionner T${l.n} et T${l.n + 1}`}>
+                  ⤵ fusionner avec T{l.n + 1}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </Page>
   )

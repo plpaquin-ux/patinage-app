@@ -410,10 +410,15 @@ input.mono {
 }
 
 /* ---- Chrono ---- */
+.content.chrono {
+  padding-bottom: 0;
+  overflow: hidden;
+}
 .chrono-screen {
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 70px - var(--nav-h) - var(--safe-b));
+  /* hauteur fixe : les boutons restent visibles, seule la liste des tours défile */
+  height: calc(100dvh - 61px - var(--safe-t) - var(--nav-h) - var(--safe-b) - 16px);
 }
 .chrono-display {
   text-align: center;
@@ -422,7 +427,7 @@ input.mono {
 .chrono-main {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: clamp(3.2rem, 17vw, 5.6rem);
+  font-size: clamp(2.8rem, 15vw, 5rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -444,14 +449,18 @@ input.mono {
 }
 .laps {
   flex: 1;
+  min-height: 0;
   overflow: auto;
-  margin: 10px 0;
+  margin: 4px 0 0;
+  padding-bottom: calc(12px + var(--safe-b));
   border-top: 1px solid var(--line);
+  -webkit-overflow-scrolling: touch;
 }
 .laps .lap {
   display: grid;
   grid-template-columns: 52px 1fr 1fr;
-  padding: 8px 6px;
+  align-items: center;
+  padding: 6px 6px;
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -473,11 +482,19 @@ input.mono {
 .laps .lap.worst .t {
   color: var(--warn);
 }
+.laps .lap .merge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 30px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  font-family: var(--sans);
+}
 .chrono-controls {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding-bottom: 8px;
+  gap: 10px;
+  padding: 6px 0 8px;
 }
 .bigbtn {
   min-height: 96px;
@@ -490,18 +507,18 @@ input.mono {
   background: var(--ok);
   color: #052e16;
   grid-column: 1 / -1;
-  min-height: 120px;
+  min-height: 110px;
 }
 .bigbtn.lap {
   background: var(--lap);
   color: #fff;
-  min-height: 140px;
+  min-height: 120px;
   font-size: 2rem;
 }
 .bigbtn.stop {
   background: var(--danger);
   color: #fff;
-  min-height: 140px;
+  min-height: 120px;
 }
 .bigbtn:active {
   filter: brightness(0.85);

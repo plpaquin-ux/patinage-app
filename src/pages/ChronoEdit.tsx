@@ -84,6 +84,23 @@ export default function ChronoEditPage() {
     })
     await recalc()
   }
+  /** Fusionne le tour t avec le précédent : le temps s'additionne, le tour t disparaît, les suivants sont renumérotés. */
+  async function fusionnerAvecPrecedent(t: Tour) {
+    const idx = trs.findIndex((x) => x.id === t.id)
+    if (idx < 1) return
+    const prev = trs[idx - 1]
+    if (!confirm(`Fusionner T${prev.numero_tour} et T${t.numero_tour} en un seul tour de ${fmtMs(prev.temps_tour_ms + t.temps_tour_ms)} ?`)) return
+    await update('tour', prev.id, {
+      temps_tour_ms: prev.temps_tour_ms + t.temps_tour_ms,
+      commentaire: [prev.commentaire, `fusion avec T${t.numero_tour} (${fmtMs(t.temps_tour_ms)})`].filter(Boolean).join(' · '),
+    })
+    await softDelete('tour', t.id)
+    const rest = trs.filter((x) => x.id !== t.id)
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i].numero_tour !== i + 1) await update('tour', rest[i].id, { numero_tour: i + 1 })
+    }
+    await recalc()
+  }
   async function supprimerTour(t: Tour) {
     if (!confirm(`Supprimer le tour ${t.numero_tour} ?`)) return
     await softDelete('tour', t.id)
@@ -157,6 +174,11 @@ export default function ChronoEditPage() {
               <div>
                 <TimeInput value={t.temps_tour_ms} allowEmpty={false} onChange={(ms) => ms != null && patchTour(t, ms)} className={t.temps_tour_ms === best ? 'best' : ''} />
                 {delta != null && delta !== 0 && <small>capté {fmtMs(t.temps_tour_capture_ms)} ({fmtDelta(delta)})</small>}
+                {i > 0 && (
+                  <button className="btn-ghost btn-sm" style={{ minHeight: 28, padding: '0 6px', fontSize: '0.78rem' }} onClick={() => fusionnerAvecPrecedent(t)}>
+                    ⤴ fusionner avec T{t.numero_tour - 1}
+                  </button>
+                )}
               </div>
               <span className="mono muted" style={{ fontSize: '0.85rem' }}>
                 {fmtMs(cumul)}
