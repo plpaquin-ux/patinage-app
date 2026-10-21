@@ -193,9 +193,10 @@ function BadgeStatut({ statut }: { statut: StatutResultat }) {
   return <span className={`badge ${cls}`}>{LIBELLES.statut[statut]}</span>
 }
 
-function Rang({ rang, nb }: { rang: number | null; nb: number | null }) {
+/** Rang « 3ᵉ / 24 ». Médaille seulement si `podium` (classement final ou finale A) : un top 3 en finale D n'est pas un podium. */
+function Rang({ rang, nb, podium = false }: { rang: number | null; nb: number | null; podium?: boolean }) {
   if (rang == null) return null
-  const medaille = rang === 1 ? '🥇' : rang === 2 ? '🥈' : rang === 3 ? '🥉' : null
+  const medaille = podium && rang <= 3 ? (rang === 1 ? '🥇' : rang === 2 ? '🥈' : '🥉') : null
   return (
     <span className="rang">
       {medaille ? <span aria-hidden="true">{medaille} </span> : null}
@@ -238,8 +239,10 @@ function PortraitTab({ data, onVideo }: { data: Portrait; onVideo: (v: { url: st
 
   const nbComp = data.competitions.length
   const nbCourses = toutes.length
-  // Podium = top 3 d'une finale (chaque finale A, B, C… remet ses médailles en InterRégional)
-  const nbPodiums = toutes.filter((l) => l.rang_officiel != null && l.rang_officiel <= 3 && l.type_manche === 'finale' && ['termine', 'avance'].includes(l.statut)).length
+  // Meilleur classement final en compétition (le rang_final saisi par compétition), avec la taille du groupe
+  const meilleur = data.competitions
+    .filter((c) => c.rang_final != null)
+    .reduce<PCompetition | null>((m, c) => (m == null || c.rang_final! < m.rang_final! || (c.rang_final === m.rang_final && (c.nb_participants ?? 0) > (m.nb_participants ?? 0)) ? c : m), null)
   const nbVideos = data.competitions.reduce((n, c) => n + (c.courses ?? []).filter((x) => x.url_video).length, 0)
 
   const serie = distanceSel ? valides.filter((l) => `${l.distance_id}|${l.longueur_piste_m ?? ''}` === distanceSel) : []
@@ -250,7 +253,7 @@ function PortraitTab({ data, onVideo }: { data: Portrait; onVideo: (v: { url: st
       <div className="stats">
         <Stat n={nbComp} label="compétitions" />
         <Stat n={nbCourses} label="courses" />
-        <Stat n={nbPodiums} label="podiums" />
+        <Stat n={meilleur?.rang_final != null ? <>{ORDINAL(meilleur.rang_final)}{meilleur.nb_participants ? <small> / {meilleur.nb_participants}</small> : null}</> : '—'} label="meilleur classement" title={meilleur ? `${meilleur.nom} (${fmtDate(meilleur.date_debut)})` : undefined} />
         <Stat n={nbVideos} label="vidéos" />
       </div>
 
@@ -353,9 +356,9 @@ function PortraitTab({ data, onVideo }: { data: Portrait; onVideo: (v: { url: st
   )
 }
 
-function Stat({ n, label }: { n: number; label: string }) {
+function Stat({ n, label, title }: { n: ReactNode; label: string; title?: string }) {
   return (
-    <div className="stat">
+    <div className="stat" title={title}>
       <div className="stat-n">{n}</div>
       <small>{label}</small>
     </div>
@@ -413,7 +416,7 @@ function CompetitionsTab({ data, onVideo }: { data: Portrait; onVideo: (v: { url
                   <div className="sub" style={{ marginTop: 4, color: 'var(--fg)' }}>
                     {comp.rang_final != null && (
                       <>
-                        Classement final : <Rang rang={comp.rang_final} nb={comp.nb_participants} />
+                        Classement final : <Rang rang={comp.rang_final} nb={comp.nb_participants} podium />
                       </>
                     )}
                     {comp.points_total != null ? `${comp.rang_final != null ? ' · ' : ''}${fmtPoints(comp.points_total)} pts` : ''}
@@ -452,7 +455,7 @@ function CompetitionsTab({ data, onVideo }: { data: Portrait; onVideo: (v: { url
                               <BadgeStatut statut={c.statut} />
                             </span>
                             <span className="course-rang">
-                              <Rang rang={c.rang_officiel} nb={c.nb_patineurs} />
+                              <Rang rang={c.rang_officiel} nb={c.nb_patineurs} podium={c.type_manche === 'finale' && (c.lettre_finale ?? 'A') === 'A'} />
                             </span>
                             <span className="mono course-temps">
                               {fmtMs(c.temps_retenu_ms)}

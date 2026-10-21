@@ -668,6 +668,17 @@ input.mono {
   font-size: 1.4rem;
   font-weight: 800;
   line-height: 1.1;
+  white-space: nowrap;
+}
+.stat-n small {
+  display: inline;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.stat > small {
+  display: block;
+  line-height: 1.15;
+  font-size: 0.72rem;
 }
 .records {
   display: grid;
