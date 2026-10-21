@@ -6,7 +6,7 @@ import { useAthletes, useCircuits, useDistances, usePistes, useSaisons } from '.
 import { create, softDelete, update } from '../lib/repo'
 import { resetPullMarkers, syncNow } from '../lib/sync'
 import { fmtLongueur } from '../lib/time'
-import { LIBELLES, type TypeCourse, type TypePiste } from '../lib/types'
+import { LIBELLES, type Circuit, type Piste, type Saison, type TypeCourse, type TypePiste } from '../lib/types'
 import { NumInput } from './ChronoEdit'
 
 export function PlusPage() {
@@ -127,69 +127,85 @@ export function AthletesPage() {
 /* ------------------------------ Pistes ------------------------------ */
 export function PistesPage() {
   const pistes = usePistes()
-  const [f, setF] = useState({ nom: '', ville: '', type_piste: 'courte_piste' as TypePiste, longueur_m: '111.12', interieur: true })
-  async function add(e: FormEvent) {
-    e.preventDefault()
-    await create('piste', {
-      nom: f.nom.trim(),
-      ville: f.ville.trim() || null,
-      province: 'QC',
-      type_piste: f.type_piste,
-      longueur_m: f.longueur_m ? Number(f.longueur_m.replace(',', '.')) : null,
-      interieur: f.interieur,
-      commentaire: null,
-    })
-    setF({ ...f, nom: '', ville: '' })
+  const [editId, setEditId] = useState<string | null>(null)
+  const [f, setF] = useState({ nom: '', ville: '', type_piste: 'courte_piste' as TypePiste, interieur: true, commentaire: '' })
+  const vide = { nom: '', ville: '', type_piste: 'courte_piste' as TypePiste, interieur: true, commentaire: '' }
+
+  function ouvrir(p: Piste) {
+    setEditId(p.id)
+    setF({ nom: p.nom, ville: p.ville ?? '', type_piste: p.type_piste, interieur: p.interieur, commentaire: p.commentaire ?? '' })
   }
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    const data = { nom: f.nom.trim(), ville: f.ville.trim() || null, type_piste: f.type_piste, interieur: f.interieur, commentaire: f.commentaire.trim() || null }
+    if (editId) await update('piste', editId, data)
+    else await create('piste', { ...data, province: 'QC', longueur_m: null })
+    setEditId(null)
+    setF(vide)
+  }
+
+  const formulaire = (
+    <form className="card" onSubmit={submit}>
+      <h3>{editId ? 'Modifier la piste' : 'Ajouter une piste'}</h3>
+      <Field label="Nom de l'aréna / anneau">
+        <input value={f.nom} onChange={(e) => setF({ ...f, nom: e.target.value })} required />
+      </Field>
+      <div className="grid2">
+        <Field label="Ville">
+          <input value={f.ville} onChange={(e) => setF({ ...f, ville: e.target.value })} />
+        </Field>
+        <Field label="Type">
+          <select value={f.type_piste} onChange={(e) => setF({ ...f, type_piste: e.target.value as TypePiste })}>
+            <option value="courte_piste">Courte piste</option>
+            <option value="longue_piste">Longue piste</option>
+          </select>
+        </Field>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={f.interieur} onChange={(e) => setF({ ...f, interieur: e.target.checked })} />
+        Intérieur
+      </label>
+      <Field label="Commentaire">
+        <input value={f.commentaire} onChange={(e) => setF({ ...f, commentaire: e.target.value })} placeholder="ex. glace rapide, stationnement…" />
+      </Field>
+      <div className="actions">
+        <button className="btn-primary">{editId ? 'Enregistrer' : 'Ajouter'}</button>
+        {editId && (
+          <button type="button" onClick={() => (setEditId(null), setF(vide))}>
+            Annuler
+          </button>
+        )}
+      </div>
+    </form>
+  )
+
   return (
     <Page title="Arénas et pistes" back="/plus">
+      <p className="muted">La longueur du tour n'est pas liée à l'aréna : elle dépend du circuit (Plus › Circuits).</p>
       {pistes?.length === 0 && <Empty>Aucune piste. Ajoute les arénas que Jeanne fréquente.</Empty>}
       <ul className="list">
         {pistes?.map((p) => (
-          <li key={p.id} className="row">
-            <div className="grow">
-              <div className="title">{p.nom}</div>
-              <div className="sub">
-                {[p.ville, LIBELLES.type_piste[p.type_piste], p.longueur_m ? `${p.longueur_m} m` : null, p.interieur ? null : 'extérieur'].filter(Boolean).join(' · ')}
+          <li key={p.id}>
+            {editId === p.id ? (
+              formulaire
+            ) : (
+              <div className="row">
+                <button className="grow btn-ghost" style={{ justifyContent: 'flex-start', textAlign: 'left', padding: 0, color: 'inherit', minHeight: 0, display: 'block' }} onClick={() => ouvrir(p)}>
+                  <div className="title">{p.nom}</div>
+                  <div className="sub">{[p.ville, LIBELLES.type_piste[p.type_piste], p.interieur ? null : 'extérieur'].filter(Boolean).join(' · ')}</div>
+                </button>
+                <button className="btn-ghost btn-sm" onClick={() => ouvrir(p)} aria-label="Modifier">
+                  ✎
+                </button>
+                <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${p.nom} ?`) && softDelete('piste', p.id)} aria-label="Retirer">
+                  ✕
+                </button>
               </div>
-            </div>
-            <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${p.nom} ?`) && softDelete('piste', p.id)}>
-              ✕
-            </button>
+            )}
           </li>
         ))}
       </ul>
-      <form className="card" onSubmit={add} style={{ marginTop: 12 }}>
-        <h3>Ajouter une piste</h3>
-        <Field label="Nom de l'aréna / anneau">
-          <input value={f.nom} onChange={(e) => setF({ ...f, nom: e.target.value })} required />
-        </Field>
-        <div className="grid2">
-          <Field label="Ville">
-            <input value={f.ville} onChange={(e) => setF({ ...f, ville: e.target.value })} />
-          </Field>
-          <Field label="Type">
-            <select
-              value={f.type_piste}
-              onChange={(e) => {
-                const t = e.target.value as TypePiste
-                setF({ ...f, type_piste: t, longueur_m: t === 'courte_piste' ? '111.12' : '400' })
-              }}
-            >
-              <option value="courte_piste">Courte piste</option>
-              <option value="longue_piste">Longue piste</option>
-            </select>
-          </Field>
-          <Field label="Longueur (m)">
-            <input className="mono" inputMode="decimal" value={f.longueur_m} onChange={(e) => setF({ ...f, longueur_m: e.target.value })} />
-          </Field>
-          <label className="check" style={{ marginTop: 22 }}>
-            <input type="checkbox" checked={f.interieur} onChange={(e) => setF({ ...f, interieur: e.target.checked })} />
-            Intérieur
-          </label>
-        </div>
-        <button className="btn-primary btn-block">Ajouter</button>
-      </form>
+      {!editId && <div style={{ marginTop: 12 }}>{formulaire}</div>}
     </Page>
   )
 }
@@ -197,63 +213,86 @@ export function PistesPage() {
 /* ------------------------------ Circuits ------------------------------ */
 export function CircuitsPage() {
   const circuits = useCircuits()
-  const [nom, setNom] = useState('')
-  const [type, setType] = useState<TypePiste | ''>('')
-  const [longueur, setLongueur] = useState('')
-  async function add(e: FormEvent) {
-    e.preventDefault()
-    await create('circuit', {
-      nom: nom.trim(),
-      type_piste: type || null,
-      organisme: null,
-      longueur_piste_m: longueur.trim() ? Number(longueur.replace(',', '.')) || null : null,
-      commentaire: null,
-    })
-    setNom('')
-    setLongueur('')
+  const [editId, setEditId] = useState<string | null>(null)
+  const vide = { nom: '', type_piste: '' as TypePiste | '', organisme: '', longueur: '' }
+  const [f, setF] = useState(vide)
+
+  function ouvrir(c: Circuit) {
+    setEditId(c.id)
+    setF({ nom: c.nom, type_piste: c.type_piste ?? '', organisme: c.organisme ?? '', longueur: c.longueur_piste_m != null ? String(c.longueur_piste_m) : '' })
   }
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    const data = {
+      nom: f.nom.trim(),
+      type_piste: f.type_piste || null,
+      organisme: f.organisme.trim() || null,
+      longueur_piste_m: f.longueur.trim() ? Number(f.longueur.replace(',', '.')) || null : null,
+    }
+    if (editId) await update('circuit', editId, data)
+    else await create('circuit', { ...data, commentaire: null })
+    setEditId(null)
+    setF(vide)
+  }
+
+  const formulaire = (
+    <form className="card" onSubmit={submit}>
+      <h3>{editId ? 'Modifier le circuit' : 'Ajouter un circuit'}</h3>
+      <Field label="Nom">
+        <input value={f.nom} onChange={(e) => setF({ ...f, nom: e.target.value })} required />
+      </Field>
+      <div className="grid2">
+        <Field label="Type de piste">
+          <select value={f.type_piste} onChange={(e) => setF({ ...f, type_piste: e.target.value as TypePiste | '' })}>
+            <option value="">—</option>
+            <option value="courte_piste">Courte piste</option>
+            <option value="longue_piste">Longue piste</option>
+          </select>
+        </Field>
+        <Field label="Longueur du tour (m)">
+          <input className="mono" inputMode="decimal" value={f.longueur} onChange={(e) => setF({ ...f, longueur: e.target.value })} placeholder="100 ou 111.12" />
+        </Field>
+      </div>
+      <Field label="Organisme">
+        <input value={f.organisme} onChange={(e) => setF({ ...f, organisme: e.target.value })} placeholder="ex. Patinage de vitesse Québec" />
+      </Field>
+      <div className="actions">
+        <button className="btn-primary">{editId ? 'Enregistrer' : 'Ajouter'}</button>
+        {editId && (
+          <button type="button" onClick={() => (setEditId(null), setF(vide))}>
+            Annuler
+          </button>
+        )}
+      </div>
+    </form>
+  )
+
   return (
     <Page title="Circuits" back="/plus">
       <p className="muted">La longueur du tour définit le nombre de tours par distance (ex. 1000 m : 10 tours à 100 m, 9 tours à 111,12 m). Les chronos passés conservent la longueur en vigueur au moment de la course.</p>
       <ul className="list">
         {circuits?.map((c) => (
-          <li key={c.id} className="row">
-            <div className="grow">
-              <div className="title">{c.nom}</div>
-              <div className="sub">{[c.type_piste ? LIBELLES.type_piste[c.type_piste] : null, c.organisme, `tour de ${fmtLongueur(c.longueur_piste_m)}`].filter(Boolean).join(' · ')}</div>
-            </div>
-            <input
-              className="mono"
-              inputMode="decimal"
-              style={{ width: 84, minHeight: 40 }}
-              defaultValue={c.longueur_piste_m ?? ''}
-              placeholder="m"
-              onBlur={(e) => update('circuit', c.id, { longueur_piste_m: e.target.value.trim() ? Number(e.target.value.replace(',', '.')) || null : null })}
-              aria-label="Longueur du tour (m)"
-            />
-            <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${c.nom} ?`) && softDelete('circuit', c.id)}>
-              ✕
-            </button>
+          <li key={c.id}>
+            {editId === c.id ? (
+              formulaire
+            ) : (
+              <div className="row">
+                <button className="grow btn-ghost" style={{ justifyContent: 'flex-start', textAlign: 'left', padding: 0, color: 'inherit', minHeight: 0, display: 'block' }} onClick={() => ouvrir(c)}>
+                  <div className="title">{c.nom}</div>
+                  <div className="sub">{[c.type_piste ? LIBELLES.type_piste[c.type_piste] : null, c.organisme, `tour de ${fmtLongueur(c.longueur_piste_m)}`].filter(Boolean).join(' · ')}</div>
+                </button>
+                <button className="btn-ghost btn-sm" onClick={() => ouvrir(c)} aria-label="Modifier">
+                  ✎
+                </button>
+                <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${c.nom} ?`) && softDelete('circuit', c.id)} aria-label="Retirer">
+                  ✕
+                </button>
+              </div>
+            )}
           </li>
         ))}
       </ul>
-      <form className="card" onSubmit={add} style={{ marginTop: 12 }}>
-        <h3>Ajouter un circuit</h3>
-        <div className="grid2">
-          <input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Nom" required />
-          <select value={type} onChange={(e) => setType(e.target.value as TypePiste | '')}>
-            <option value="">Type —</option>
-            <option value="courte_piste">Courte piste</option>
-            <option value="longue_piste">Longue piste</option>
-          </select>
-        </div>
-        <Field label="Longueur du tour (m)">
-          <input className="mono" inputMode="decimal" value={longueur} onChange={(e) => setLongueur(e.target.value)} placeholder="100 ou 111.12" />
-        </Field>
-        <button className="btn-primary btn-block" style={{ marginTop: 10 }}>
-          Ajouter
-        </button>
-      </form>
+      {!editId && <div style={{ marginTop: 12 }}>{formulaire}</div>}
     </Page>
   )
 }
@@ -292,7 +331,7 @@ export function DistancesPage() {
           {distances?.map((d) => (
             <tr key={d.id}>
               <td>
-                {d.libelle}
+                <input defaultValue={d.libelle} onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== d.libelle && update('distance', d.id, { libelle: e.target.value.trim() })} style={{ minHeight: 40 }} />
                 {d.type_course !== 'individuelle' && <small> · {LIBELLES.type_course[d.type_course]}</small>}
               </td>
               <td>{d.type_piste === 'courte_piste' ? 'CP' : 'LP'}</td>
@@ -346,44 +385,71 @@ export function DistancesPage() {
 export function SaisonsPage() {
   const saisons = useSaisons()
   const y = new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1
-  const [f, setF] = useState({ libelle: `${y}-${y + 1}`, date_debut: `${y}-07-01`, date_fin: `${y + 1}-06-30` })
-  async function add(e: FormEvent) {
-    e.preventDefault()
-    await create('saison', f)
-    setF({ libelle: `${y + 1}-${y + 2}`, date_debut: `${y + 1}-07-01`, date_fin: `${y + 2}-06-30` })
+  const vide = { libelle: `${y}-${y + 1}`, date_debut: `${y}-07-01`, date_fin: `${y + 1}-06-30` }
+  const [editId, setEditId] = useState<string | null>(null)
+  const [f, setF] = useState(vide)
+  function ouvrir(s: Saison) {
+    setEditId(s.id)
+    setF({ libelle: s.libelle, date_debut: s.date_debut, date_fin: s.date_fin })
   }
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    if (editId) await update('saison', editId, f)
+    else await create('saison', f)
+    setEditId(null)
+    setF(vide)
+  }
+  const formulaire = (
+    <form className="card" onSubmit={submit}>
+      <h3>{editId ? 'Modifier la saison' : 'Ajouter une saison'}</h3>
+      <Field label="Libellé">
+        <input value={f.libelle} onChange={(e) => setF({ ...f, libelle: e.target.value })} required />
+      </Field>
+      <div className="grid2">
+        <Field label="Début">
+          <input type="date" value={f.date_debut} onChange={(e) => setF({ ...f, date_debut: e.target.value })} required />
+        </Field>
+        <Field label="Fin">
+          <input type="date" value={f.date_fin} onChange={(e) => setF({ ...f, date_fin: e.target.value })} required />
+        </Field>
+      </div>
+      <div className="actions">
+        <button className="btn-primary">{editId ? 'Enregistrer' : 'Ajouter'}</button>
+        {editId && (
+          <button type="button" onClick={() => (setEditId(null), setF(vide))}>
+            Annuler
+          </button>
+        )}
+      </div>
+    </form>
+  )
   return (
     <Page title="Saisons" back="/plus">
       <ul className="list">
         {saisons?.map((s) => (
-          <li key={s.id} className="row">
-            <div className="grow">
-              <div className="title">{s.libelle}</div>
-              <div className="sub">
-                {s.date_debut} → {s.date_fin}
+          <li key={s.id}>
+            {editId === s.id ? (
+              formulaire
+            ) : (
+              <div className="row">
+                <button className="grow btn-ghost" style={{ justifyContent: 'flex-start', textAlign: 'left', padding: 0, color: 'inherit', minHeight: 0, display: 'block' }} onClick={() => ouvrir(s)}>
+                  <div className="title">{s.libelle}</div>
+                  <div className="sub">
+                    {s.date_debut} → {s.date_fin}
+                  </div>
+                </button>
+                <button className="btn-ghost btn-sm" onClick={() => ouvrir(s)} aria-label="Modifier">
+                  ✎
+                </button>
+                <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${s.libelle} ?`) && softDelete('saison', s.id)} aria-label="Retirer">
+                  ✕
+                </button>
               </div>
-            </div>
-            <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => confirm(`Retirer ${s.libelle} ?`) && softDelete('saison', s.id)}>
-              ✕
-            </button>
+            )}
           </li>
         ))}
       </ul>
-      <form className="card" onSubmit={add} style={{ marginTop: 12 }}>
-        <h3>Ajouter une saison</h3>
-        <Field label="Libellé">
-          <input value={f.libelle} onChange={(e) => setF({ ...f, libelle: e.target.value })} required />
-        </Field>
-        <div className="grid2">
-          <Field label="Début">
-            <input type="date" value={f.date_debut} onChange={(e) => setF({ ...f, date_debut: e.target.value })} required />
-          </Field>
-          <Field label="Fin">
-            <input type="date" value={f.date_fin} onChange={(e) => setF({ ...f, date_fin: e.target.value })} required />
-          </Field>
-        </div>
-        <button className="btn-primary btn-block">Ajouter</button>
-      </form>
+      {!editId && <div style={{ marginTop: 12 }}>{formulaire}</div>}
     </Page>
   )
 }

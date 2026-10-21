@@ -91,8 +91,7 @@ export function CompetitionFormPage() {
 
   // Longueur du tour proposée : circuit > piste (seulement si l'usager n'a rien saisi)
   const circuitSel = circuits?.find((c) => c.id === f.circuit_id)
-  const pisteSel = pistes?.find((p) => p.id === f.piste_id)
-  const longueurSuggeree = circuitSel?.longueur_piste_m ?? pisteSel?.longueur_m ?? null
+  const longueurSuggeree = circuitSel?.longueur_piste_m ?? null
   useEffect(() => {
     if (!id && athletes && inscrire.length === 0) setInscrire(athletes.map((a) => a.id))
   }, [athletes, id, inscrire.length])
@@ -192,7 +191,7 @@ export function CompetitionFormPage() {
           label="Longueur du tour (m)"
           hint={
             longueurSuggeree != null
-              ? `Laisse vide pour utiliser ${fmtLongueur(longueurSuggeree)} (${circuitSel?.longueur_piste_m != null ? 'circuit' : 'piste'}). Ex. 1000 m = ${nbToursAttendus(1000, Number(longueurTxt.replace(',', '.')) || longueurSuggeree)} tours.`
+              ? `Laisse vide pour utiliser ${fmtLongueur(longueurSuggeree)} (circuit). Ex. 1000 m = ${nbToursAttendus(1000, Number(longueurTxt.replace(',', '.')) || longueurSuggeree)} tours.`
               : 'Ex. 100 m en InterRégional, 111,12 m au provincial. Sinon, définis-la sur le circuit.'
           }
         >
@@ -295,7 +294,7 @@ export function CompetitionDetailPage() {
             .join(' · ')}
         </small>
         <div>
-          <span className="badge accent">tour de {fmtLongueur(comp.longueur_piste_m ?? circuit?.longueur_piste_m ?? piste?.longueur_m)}</span>
+          <span className="badge accent">tour de {fmtLongueur(comp.longueur_piste_m ?? circuit?.longueur_piste_m)}</span>
         </div>
         {comp.url_resultats && (
           <div>
@@ -328,7 +327,7 @@ export function CompetitionDetailPage() {
         {resume?.map(({ epreuve, courses, nbParts, best }) => {
           const d = allDistances?.find((x) => x.id === epreuve.distance_id)
           const g = groupes?.find((x) => x.id === epreuve.groupe_id)
-          const nbT = nbToursAttendus(d?.metres, comp.longueur_piste_m ?? circuit?.longueur_piste_m ?? piste?.longueur_m, d?.nb_tours_defaut)
+          const nbT = nbToursAttendus(d?.metres, comp.longueur_piste_m ?? circuit?.longueur_piste_m, d?.nb_tours_defaut)
           return (
             <li key={epreuve.id}>
               <Link className="row" to={`/epreuves/${epreuve.id}`}>

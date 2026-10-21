@@ -74,13 +74,13 @@ export function retenu(c: { temps_officiel_ms: number | null; temps_ajuste_ms: n
   return c.temps_officiel_ms ?? c.temps_ajuste_ms ?? c.temps_calcule_ms ?? null
 }
 
-/** Longueur du tour effective : compétition > circuit > piste. */
+/** Longueur du tour effective : compétition > circuit. (L'aréna n'entre pas en jeu : la longueur dépend du circuit.) */
 export function longueurPiste(
   competition?: { longueur_piste_m: number | null } | null,
   circuit?: { longueur_piste_m: number | null } | null,
-  piste?: { longueur_m: number | null } | null,
+  _piste?: { longueur_m: number | null } | null,
 ): number | null {
-  return competition?.longueur_piste_m ?? circuit?.longueur_piste_m ?? piste?.longueur_m ?? null
+  return competition?.longueur_piste_m ?? circuit?.longueur_piste_m ?? null
 }
 
 /** Nombre de tours attendus (arrondi au supérieur) : metres / longueur, sinon défaut de la distance. */
