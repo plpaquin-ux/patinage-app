@@ -23,6 +23,10 @@ Pousser sur `main` déclenche la construction et la publication sur GitHub Pages
 L'URL et la clé publishable Supabase sont dans le workflow (valeurs par défaut) ; elles peuvent être
 surchargées par des variables de dépôt `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
+## Documentation
+
+L'état complet de l'application (infrastructure, code, modèle, règles, historique) est dans **`docs/ARCHITECTURE.md`**, tenu à jour à chaque modification.
+
 ## Modèle de données
 
 Voir `supabase/migrations/0001_init_patinage.sql` : compte → athlète → compétition → épreuve → course
