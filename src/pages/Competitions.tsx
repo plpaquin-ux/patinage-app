@@ -26,6 +26,8 @@ export function CompetitionsPage() {
   const competitions = useCompetitions()
   const pistes = usePistes()
   const circuits = useCircuits()
+  const inscriptions = useLiveQuery(async () => alive(await db.inscription_competition.toArray()), [])
+  const athletes = useAthletes()
   const [filtre, setFiltre] = useState<'toutes' | 'courte_piste' | 'longue_piste'>('toutes')
   const list = competitions?.filter((c) => {
     if (filtre === 'toutes') return true
@@ -46,6 +48,9 @@ export function CompetitionsPage() {
       <ul className="list">
         {list?.map((c) => {
           const p = pistes?.find((x) => x.id === c.piste_id)
+          const resultats = (inscriptions ?? [])
+            .filter((i) => i.competition_id === c.id && i.rang_final)
+            .map((i) => `${(athletes?.length ?? 0) > 1 ? `${athletes?.find((a) => a.id === i.athlete_id)?.prenom ?? ''} ` : ''}${i.rang_final}ᵉ${i.nb_participants ? ` / ${i.nb_participants}` : ''}`)
           return (
             <li key={c.id}>
               <Link className="row" to={`/competitions/${c.id}`}>
@@ -54,6 +59,7 @@ export function CompetitionsPage() {
                   <div className="sub">
                     {fmtDate(c.date_debut)}
                     {p ? ` · ${p.ville ?? p.nom}` : ''}
+                    {resultats.length ? ` · ${resultats.join(', ')}` : ''}
                   </div>
                 </div>
                 {p && <span className="badge">{p.type_piste === 'courte_piste' ? 'CP' : 'LP'}</span>}
@@ -130,6 +136,7 @@ export function CompetitionFormPage() {
           groupe_id: null,
           dossard: null,
           rang_final: null,
+          nb_participants: null,
           points_total: null,
           commentaire: null,
         })
@@ -395,6 +402,9 @@ export function CompetitionDetailPage() {
               <Field label="Classement final">
                 <NumInput value={ins.rang_final} onChange={(v) => update('inscription_competition', ins.id, { rang_final: v })} />
               </Field>
+              <Field label="Patineurs dans la catégorie" hint={ins.rang_final && ins.nb_participants ? `${ins.rang_final}ᵉ sur ${ins.nb_participants}` : undefined}>
+                <NumInput value={ins.nb_participants} onChange={(v) => update('inscription_competition', ins.id, { nb_participants: v })} />
+              </Field>
               <Field label="Points (cumul)">
                 <NumInput value={ins.points_total} onChange={(v) => update('inscription_competition', ins.id, { points_total: v })} decimal />
               </Field>
@@ -424,6 +434,7 @@ export function CompetitionDetailPage() {
                       groupe_id: null,
                       dossard: null,
                       rang_final: null,
+                      nb_participants: null,
                       points_total: null,
                       commentaire: null,
                     })

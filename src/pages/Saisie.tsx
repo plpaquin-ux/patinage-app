@@ -47,6 +47,8 @@ export default function SaisiePage() {
   const [points, setPoints] = useState<number | null>(null)
   const [nbPatineurs, setNbPatineurs] = useState<number | null>(null)
   const [commentaire, setCommentaire] = useState('')
+  const [rangFinal, setRangFinal] = useState<number | null>(null)
+  const [nbParticipants, setNbParticipants] = useState<number | null>(null)
   const [journal, setJournal] = useState<{ id: string; texte: string }[]>([])
   const [busy, setBusy] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -106,8 +108,11 @@ export default function SaisiePage() {
       }
       // 2. Inscription (résultat global, si absente)
       const inscriptions = alive(await db.inscription_competition.where('competition_id').equals(compId).toArray())
-      if (!inscriptions.some((i) => i.athlete_id === athleteId)) {
-        await create('inscription_competition', { competition_id: compId, athlete_id: athleteId, groupe_id: null, dossard: null, rang_final: null, points_total: null, commentaire: null })
+      const ins = inscriptions.find((i) => i.athlete_id === athleteId)
+      if (!ins) {
+        await create('inscription_competition', { competition_id: compId, athlete_id: athleteId, groupe_id: null, dossard: null, rang_final: rangFinal, nb_participants: nbParticipants, points_total: null, commentaire: null })
+      } else if ((rangFinal != null && ins.rang_final == null) || (nbParticipants != null && ins.nb_participants == null)) {
+        await update('inscription_competition', ins.id, { rang_final: ins.rang_final ?? rangFinal, nb_participants: ins.nb_participants ?? nbParticipants })
       }
       // 3. Épreuve (réutilisée si la même distance existe déjà dans la compétition)
       const epreuves = alive(await db.epreuve.where('competition_id').equals(compId).toArray())
@@ -331,6 +336,14 @@ export default function SaisiePage() {
           <Field label="Commentaire">
             <input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} placeholder="ex. chute au 3e tour, repêchée" />
           </Field>
+          <div className="grid2">
+            <Field label="Classement final (compétition)" hint="Facultatif, une seule fois par compétition">
+              <NumInput key={competitionId + '-rf'} value={rangFinal} onChange={setRangFinal} />
+            </Field>
+            <Field label="Patineurs dans la catégorie">
+              <NumInput key={competitionId + '-np'} value={nbParticipants} onChange={setNbParticipants} />
+            </Field>
+          </div>
           {erreur && <div className="error">{erreur}</div>}
           <button className="btn-primary btn-block" disabled={!pret || busy} style={{ minHeight: 56 }}>
             {busy ? '…' : 'Enregistrer et saisir le suivant'}

@@ -129,6 +129,8 @@ export interface InscriptionCompetition extends BaseRow {
   groupe_id: string | null
   dossard: string | null
   rang_final: number | null
+  /** Nombre de patineurs dans la catégorie / le groupe (pour lire le rang : 3 / 24). */
+  nb_participants: number | null
   points_total: number | null
   commentaire: string | null
 }
