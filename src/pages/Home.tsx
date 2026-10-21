@@ -41,6 +41,9 @@ export default function HomePage() {
           + Compétition
         </Link>
       </div>
+      <Link className="btn btn-block" to="/saisie" style={{ marginTop: 10 }}>
+        ✎ Saisir un résultat passé (sans chrono)
+      </Link>
 
       {athletes && athletes.length === 0 && (
         <div className="notice" style={{ marginTop: 14 }}>

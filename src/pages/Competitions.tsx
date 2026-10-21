@@ -318,9 +318,14 @@ export function CompetitionDetailPage() {
       {/* Épreuves */}
       <div className="section-head">
         <h3>Épreuves</h3>
-        <button className="btn-sm" onClick={() => setShowEpreuve(!showEpreuve)}>
-          + Épreuve
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Link className="btn btn-sm" to={`/saisie?competition=${comp.id}`}>
+            Saisir un résultat
+          </Link>
+          <button className="btn-sm" onClick={() => setShowEpreuve(!showEpreuve)}>
+            + Épreuve
+          </button>
+        </div>
       </div>
       {showEpreuve && (
         <EpreuveForm

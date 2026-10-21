@@ -9,6 +9,7 @@ import HistoriquePage from './pages/Historique'
 import HomePage from './pages/Home'
 import LoginPage, { OnboardingPage } from './pages/Login'
 import { AthletesPage, CircuitsPage, DistancesPage, PistesPage, PlusPage, SaisonsPage } from './pages/Plus'
+import SaisiePage from './pages/Saisie'
 
 function Gate() {
   const { loading, session, compte, comptesLoaded } = useAuth()
@@ -34,6 +35,7 @@ function Gate() {
       <Route path="/courses/:id" element={<CoursePage />} />
       <Route path="/entrainement" element={<EntrainementsPage />} />
       <Route path="/entrainement/:id" element={<SeancePage />} />
+      <Route path="/saisie" element={<SaisiePage />} />
       <Route path="/historique" element={<HistoriquePage />} />
       <Route path="/plus" element={<PlusPage />} />
       <Route path="/plus/athletes" element={<AthletesPage />} />

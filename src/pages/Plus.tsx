@@ -105,9 +105,17 @@ export function AthletesPage() {
               </select>
             </Field>
           </div>
-          <button className="btn-danger btn-sm" onClick={() => confirm(`Retirer ${a.prenom} ?`) && softDelete('athlete', a.id)}>
-            Retirer
-          </button>
+          <div className="actions" style={{ marginTop: 4 }}>
+            <Link className="btn btn-sm btn-primary" to={`/saisie?athlete=${a.id}`}>
+              + Résultats passés
+            </Link>
+            <Link className="btn btn-sm" to="/historique">
+              Historique
+            </Link>
+            <button className="btn-danger btn-sm" onClick={() => confirm(`Retirer ${a.prenom} ?`) && softDelete('athlete', a.id)}>
+              Retirer
+            </button>
+          </div>
         </div>
       ))}
       <form className="card" onSubmit={add}>
