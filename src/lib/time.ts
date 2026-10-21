@@ -41,9 +41,16 @@ export function parseTime(input: string): number | null {
   return minutes * 60000 + seconds * 1000 + frac
 }
 
+/** Date seule (« 2024-11-23 ») → Date locale à minuit (évite le décalage UTC d'un jour). */
+export function parseDateLocale(iso: string): Date {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return new Date(iso)
+}
+
 export function fmtDate(iso: string | null | undefined, withTime = false): string {
   if (!iso) return '—'
-  const d = new Date(iso)
+  const d = parseDateLocale(iso)
   if (Number.isNaN(d.getTime())) return iso
   const date = d.toLocaleDateString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric' })
   if (!withTime) return date

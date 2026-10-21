@@ -5,7 +5,7 @@ import { Empty, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import { getDefaultAthleteId, useAthletes, useDistances } from '../lib/hooks'
 import { alive } from '../lib/repo'
-import { fmtDate, fmtDelta, fmtLongueur, fmtMs, longueurPiste, retenu } from '../lib/time'
+import { fmtDate, fmtDelta, fmtLongueur, fmtMs, longueurPiste, parseDateLocale, retenu } from '../lib/time'
 import { LIBELLES, mancheLabel, type Chrono, type Course, type Participation, type TypePiste } from '../lib/types'
 
 interface Point {
@@ -199,7 +199,7 @@ function Chart({ points }: { points: Point[] }) {
   const W = 640
   const H = 260
   const m = { t: 16, r: 16, b: 36, l: 56 }
-  const xs = points.map((p) => new Date(p.date).getTime())
+  const xs = points.map((p) => parseDateLocale(p.date).getTime())
   const ys = points.map((p) => p.temps)
   const x0 = Math.min(...xs)
   const x1 = Math.max(...xs)
