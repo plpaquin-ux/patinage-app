@@ -1,10 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Empty, Field, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import {
   useAthletes,
+  useCircuitDistances,
   useCircuits,
   useCompetition,
   useCompetitions,
@@ -234,8 +235,16 @@ export function CompetitionDetailPage() {
   const groupes = useGroupes(id)
   const inscriptions = useInscriptions(id)
   const athletes = useAthletes()
-  const distances = useDistances(piste?.type_piste ?? null)
+  const liens = useCircuitDistances()
   const allDistances = useDistances()
+  // Distances proposées : programme du circuit si défini, sinon celles du type de piste, sinon toutes
+  const distancesCircuit = useMemo(() => {
+    if (!allDistances) return []
+    const ids = new Set((liens ?? []).filter((l) => l.circuit_id === comp?.circuit_id).map((l) => l.distance_id))
+    if (comp?.circuit_id && ids.size > 0) return allDistances.filter((d) => ids.has(d.id))
+    const tp = piste?.type_piste ?? circuit?.type_piste ?? null
+    return tp ? allDistances.filter((d) => d.type_piste === tp) : allDistances
+  }, [allDistances, liens, comp?.circuit_id, piste?.type_piste, circuit?.type_piste])
   const [showEpreuve, setShowEpreuve] = useState(false)
   const [newGroupe, setNewGroupe] = useState('')
 
@@ -316,7 +325,8 @@ export function CompetitionDetailPage() {
       {showEpreuve && (
         <EpreuveForm
           competitionId={comp.id}
-          distances={(distances && distances.length > 0 ? distances : allDistances) ?? []}
+          distances={distancesCircuit.length > 0 ? distancesCircuit : (allDistances ?? [])}
+          filtre={comp.circuit_id && distancesCircuit.length > 0 ? `Programme du circuit ${circuit?.nom ?? ''}` : null}
           groupes={groupes ?? []}
           ordre={(epreuves?.length ?? 0) + 1}
           onDone={() => setShowEpreuve(false)}
@@ -459,12 +469,14 @@ function EpreuveForm({
   groupes,
   ordre,
   onDone,
+  filtre,
 }: {
   competitionId: string
   distances: { id: string; libelle: string; type_piste: string; type_course: TypeCourse }[]
   groupes: { id: string; nom: string }[]
   ordre: number
   onDone: () => void
+  filtre?: string | null
 }) {
   const [distanceId, setDistanceId] = useState(distances[0]?.id ?? '')
   const [groupeId, setGroupeId] = useState('')
@@ -500,7 +512,7 @@ function EpreuveForm({
 
   return (
     <form className="card" onSubmit={submit}>
-      <Field label="Distance">
+      <Field label="Distance" hint={filtre ?? undefined}>
         <select value={distanceId} onChange={(e) => setDistanceId(e.target.value)} required>
           {distances.map((d) => (
             <option key={d.id} value={d.id}>

@@ -4,6 +4,7 @@ import type {
   AthleteSaison,
   Chrono,
   Circuit,
+  CircuitDistance,
   Competition,
   Course,
   Distance,
@@ -42,6 +43,7 @@ class PatinageDB extends Dexie {
   circuit!: Table<Circuit, string>
   piste!: Table<Piste, string>
   distance!: Table<Distance, string>
+  circuit_distance!: Table<CircuitDistance, string>
   equipement!: Table<Equipement, string>
   competition!: Table<Competition, string>
   groupe!: Table<Groupe, string>
@@ -76,6 +78,9 @@ class PatinageDB extends Dexie {
       participation: 'id, course_id, athlete_id, chrono_id, updated_at',
       outbox: '++id, table, row_id, created_at',
       meta: 'key',
+    })
+    this.version(2).stores({
+      circuit_distance: 'id, circuit_id, distance_id, updated_at',
     })
   }
 

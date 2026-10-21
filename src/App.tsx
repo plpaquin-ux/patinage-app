@@ -11,8 +11,8 @@ import LoginPage, { OnboardingPage } from './pages/Login'
 import { AthletesPage, CircuitsPage, DistancesPage, PistesPage, PlusPage, SaisonsPage } from './pages/Plus'
 
 function Gate() {
-  const { loading, session, compte } = useAuth()
-  if (loading) {
+  const { loading, session, compte, comptesLoaded } = useAuth()
+  if (loading || (session && !compte && !comptesLoaded)) {
     return (
       <div className="login">
         <div className="muted">Chargement…</div>

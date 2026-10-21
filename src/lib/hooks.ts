@@ -18,6 +18,9 @@ export function useDistances(typePiste?: TypePiste | null) {
     [typePiste],
   )
 }
+export function useCircuitDistances() {
+  return useLiveQuery(async () => alive(await db.circuit_distance.toArray()), [])
+}
 export function usePistes() {
   return useLiveQuery(async () => alive(await db.piste.toArray()).sort((a, b) => a.nom.localeCompare(b.nom)), [])
 }

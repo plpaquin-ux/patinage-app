@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { Empty, Field, Page } from '../components/Layout'
-import { useAthletes, useCircuits, useDistances, usePistes, useSaisons } from '../lib/hooks'
+import { useAthletes, useCircuitDistances, useCircuits, useDistances, usePistes, useSaisons } from '../lib/hooks'
 import { create, softDelete, update } from '../lib/repo'
 import { resetPullMarkers, syncNow } from '../lib/sync'
 import { fmtLongueur } from '../lib/time'
@@ -300,12 +300,23 @@ export function CircuitsPage() {
 /* ------------------------------ Distances ------------------------------ */
 export function DistancesPage() {
   const distances = useDistances()
-  const [f, setF] = useState({ type_piste: 'courte_piste' as TypePiste, metres: '', libelle: '', type_course: 'individuelle' as TypeCourse, nb_tours: '' })
+  const circuits = useCircuits()
+  const liens = useCircuitDistances()
+  const [f, setF] = useState({ type_piste: 'courte_piste' as TypePiste, metres: '', libelle: '', type_course: 'individuelle' as TypeCourse, nb_tours: '', circuits: [] as string[] })
+
+  function estLie(circuitId: string, distanceId: string) {
+    return liens?.find((l) => l.circuit_id === circuitId && l.distance_id === distanceId)
+  }
+  async function basculer(circuitId: string, distanceId: string) {
+    const l = estLie(circuitId, distanceId)
+    if (l) await softDelete('circuit_distance', l.id)
+    else await create('circuit_distance', { circuit_id: circuitId, distance_id: distanceId })
+  }
   async function add(e: FormEvent) {
     e.preventDefault()
     const metres = Number(f.metres)
     if (!metres) return
-    await create('distance', {
+    const d = await create('distance', {
       type_piste: f.type_piste,
       metres,
       libelle: f.libelle.trim() || `${metres} m`,
@@ -313,40 +324,51 @@ export function DistancesPage() {
       nb_tours_defaut: f.nb_tours ? Number(f.nb_tours.replace(',', '.')) : null,
       actif: true,
     })
-    setF({ ...f, metres: '', libelle: '', nb_tours: '' })
+    for (const cid of f.circuits) await create('circuit_distance', { circuit_id: cid, distance_id: d.id })
+    setF({ ...f, metres: '', libelle: '', nb_tours: '', circuits: [] })
   }
   return (
     <Page title="Distances" back="/plus">
-      <p className="muted">Le nombre de tours est normalement calculé à partir de la longueur du tour (circuit / compétition). La valeur ici ne sert que si la longueur est inconnue.</p>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Distance</th>
-            <th>Piste</th>
-            <th style={{ textAlign: 'right' }}>Tours</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {distances?.map((d) => (
-            <tr key={d.id}>
-              <td>
-                <input defaultValue={d.libelle} onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== d.libelle && update('distance', d.id, { libelle: e.target.value.trim() })} style={{ minHeight: 40 }} />
-                {d.type_course !== 'individuelle' && <small> · {LIBELLES.type_course[d.type_course]}</small>}
-              </td>
-              <td>{d.type_piste === 'courte_piste' ? 'CP' : 'LP'}</td>
-              <td className="num" style={{ width: 90 }}>
-                <NumInput value={d.nb_tours_defaut} onChange={(v) => update('distance', d.id, { nb_tours_defaut: v })} decimal />
-              </td>
-              <td style={{ width: 40 }}>
-                <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: 0 }} onClick={() => confirm(`Retirer ${d.libelle} ?`) && update('distance', d.id, { actif: false })}>
-                  ✕
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <p className="muted">Coche les circuits où chaque distance se court : le formulaire d'épreuve d'une compétition ne proposera que les distances de son circuit. Le nombre de tours est calculé à partir de la longueur du tour du circuit ; le « défaut » ne sert que si elle est inconnue.</p>
+      {(['courte_piste', 'longue_piste'] as TypePiste[]).map((tp) => {
+        const ds = distances?.filter((d) => d.type_piste === tp) ?? []
+        const cs = circuits?.filter((c) => !c.type_piste || c.type_piste === tp) ?? []
+        if (ds.length === 0) return null
+        return (
+          <div key={tp}>
+            <h3 style={{ marginTop: 16 }}>{LIBELLES.type_piste[tp]}</h3>
+            {ds.map((d) => (
+              <div className="card" key={d.id} style={{ padding: '10px 12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 36px', gap: 8, alignItems: 'center' }}>
+                  <div>
+                    <input defaultValue={d.libelle} onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== d.libelle && update('distance', d.id, { libelle: e.target.value.trim() })} style={{ minHeight: 40 }} aria-label="Libellé" />
+                    {d.type_course !== 'individuelle' && <small>{LIBELLES.type_course[d.type_course]}</small>}
+                  </div>
+                  <div>
+                    <NumInput value={d.nb_tours_defaut} onChange={(v) => update('distance', d.id, { nb_tours_defaut: v })} decimal />
+                    <small>tours déf.</small>
+                  </div>
+                  <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: 0 }} onClick={() => confirm(`Retirer ${d.libelle} ?`) && update('distance', d.id, { actif: false })} aria-label="Retirer">
+                    ✕
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {cs.length === 0 && <small>Aucun circuit de ce type.</small>}
+                  {cs.map((c) => {
+                    const on = !!estLie(c.id, d.id)
+                    return (
+                      <button key={c.id} className={`btn-sm${on ? ' btn-primary' : ''}`} style={{ minHeight: 34 }} onClick={() => basculer(c.id, d.id)} aria-pressed={on}>
+                        {on ? '✓ ' : ''}
+                        {c.nom}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })}
       <form className="card" onSubmit={add} style={{ marginTop: 12 }}>
         <h3>Ajouter une distance</h3>
         <div className="grid2">
@@ -374,6 +396,21 @@ export function DistancesPage() {
         </div>
         <Field label="Libellé (facultatif)">
           <input value={f.libelle} onChange={(e) => setF({ ...f, libelle: e.target.value })} placeholder="ex. Relais 3000 m" />
+        </Field>
+        <Field label="Circuits où elle se court">
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {circuits
+              ?.filter((c) => !c.type_piste || c.type_piste === f.type_piste)
+              .map((c) => {
+                const on = f.circuits.includes(c.id)
+                return (
+                  <button type="button" key={c.id} className={`btn-sm${on ? ' btn-primary' : ''}`} onClick={() => setF({ ...f, circuits: on ? f.circuits.filter((x) => x !== c.id) : [...f.circuits, c.id] })}>
+                    {on ? '✓ ' : ''}
+                    {c.nom}
+                  </button>
+                )
+              })}
+          </div>
         </Field>
         <button className="btn-primary btn-block">Ajouter</button>
       </form>

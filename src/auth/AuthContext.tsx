@@ -13,6 +13,7 @@ export interface CompteInfo {
 
 interface AuthState {
   loading: boolean
+  comptesLoaded: boolean
   session: Session | null
   compte: CompteInfo | null
   comptes: CompteInfo[]
@@ -41,14 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
   const [compteId, setCompteIdState] = useState<string | null>(getCompteId())
   const [error, setError] = useState<string | null>(null)
+  // true dès que la liste des comptes a été lue depuis le serveur (ou qu'on est hors ligne avec un cache)
+  const [comptesLoaded, setComptesLoaded] = useState<boolean>(() => !isOnline() || !!getCompteId())
 
   const reloadComptes = useCallback(async () => {
-    if (!isOnline()) return
+    if (!isOnline()) {
+      setComptesLoaded(true)
+      return
+    }
     const { data, error } = await supabase
       .from('compte_membre')
       .select('role, compte:compte_id(id, nom)')
     if (error) {
       setError(error.message)
+      setComptesLoaded(true)
       return
     }
     const list: CompteInfo[] = (data ?? [])
@@ -61,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(COMPTE_CACHE, JSON.stringify(list))
     const current = getCompteId()
     if (list.length > 0 && (!current || !list.some((c) => c.id === current))) {
+      // Bascule automatique sur un compte existant : on repart d'une base locale propre
+      await clearLocalData()
       setCompteId(list[0].id)
       setCompteIdState(list[0].id)
     }
@@ -68,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCompteId(null)
       setCompteIdState(null)
     }
+    setComptesLoaded(true)
   }, [])
 
   useEffect(() => {
@@ -138,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const selectCompte = useCallback(async (id: string) => {
     await clearLocalData()
+    await resetPullMarkers()
     setCompteId(id)
     setCompteIdState(id)
     void syncNow()
@@ -147,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthState = {
     loading,
+    comptesLoaded,
     session,
     compte: compteId ? (compte ?? { id: compteId, nom: 'Mon compte', role: 'editeur' }) : null,
     comptes,

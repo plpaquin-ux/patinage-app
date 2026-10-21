@@ -69,6 +69,12 @@ export interface Circuit extends BaseRow {
   commentaire: string | null
 }
 
+/** Programme d'un circuit : distances qui s'y courent. */
+export interface CircuitDistance extends BaseRow {
+  circuit_id: string
+  distance_id: string
+}
+
 export interface Piste extends BaseRow {
   nom: string
   ville: string | null
@@ -227,6 +233,7 @@ export const SYNC_TABLES = [
   'circuit',
   'piste',
   'distance',
+  'circuit_distance',
   'equipement',
   'competition',
   'groupe',
@@ -247,6 +254,7 @@ export interface TableMap {
   circuit: Circuit
   piste: Piste
   distance: Distance
+  circuit_distance: CircuitDistance
   equipement: Equipement
   competition: Competition
   groupe: Groupe

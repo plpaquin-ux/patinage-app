@@ -61,6 +61,7 @@ export function OnboardingPage() {
   const [nom, setNom] = useState('Famille')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [montrerCreation, setMontrerCreation] = useState(false)
 
   async function go(e: FormEvent) {
     e.preventDefault()
@@ -93,7 +94,12 @@ export function OnboardingPage() {
             </ul>
           </>
         )}
-        <form onSubmit={go}>
+        {comptes.length > 0 && !montrerCreation && (
+          <button className="btn-ghost btn-block" onClick={() => setMontrerCreation(true)}>
+            Créer un autre compte (rarement nécessaire)
+          </button>
+        )}
+        <form onSubmit={go} style={{ display: comptes.length > 0 && !montrerCreation ? 'none' : undefined }}>
           <h3>Créer un compte</h3>
           <p className="muted">Un compte regroupe les athlètes, compétitions et chronos d'une famille ou d'un club. Les distances et circuits standard seront préremplis.</p>
           {err && <div className="error">{err}</div>}
