@@ -327,8 +327,8 @@ export function CoursePage() {
         <Field label="État de la glace">
           <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
         </Field>
-        <Field label="Lien vidéo">
-          <input type="url" defaultValue={course.url_video ?? ''} onBlur={(e) => update('course', course.id, { url_video: e.target.value || null })} placeholder="https://" />
+        <Field label="Vidéo de la manche (lien YouTube)" hint="Utilisée si l'athlète n'a pas de vidéo propre">
+          <input type="url" inputMode="url" defaultValue={course.url_video ?? ''} onBlur={(e) => update('course', course.id, { url_video: e.target.value || null })} placeholder="https://youtu.be/…" />
         </Field>
         <Field label="Commentaire">
           <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />

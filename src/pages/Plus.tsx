@@ -1,11 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { Empty, Field, Page } from '../components/Layout'
 import { useAthletes, useCircuitDistances, useCircuits, useDistances, usePistes, useSaisons } from '../lib/hooks'
 import { create, softDelete, update } from '../lib/repo'
+import { basculerPartage, creerPartage, listerPartages, supprimerPartage, urlPartage, type Partage } from '../lib/partage'
+import { isOnline } from '../lib/supabase'
 import { resetPullMarkers, syncNow } from '../lib/sync'
-import { fmtLongueur } from '../lib/time'
+import { fmtDate, fmtLongueur } from '../lib/time'
 import { LIBELLES, type Circuit, type Piste, type Saison, type TypeCourse, type TypePiste } from '../lib/types'
 import { NumInput } from './ChronoEdit'
 
@@ -116,6 +118,7 @@ export function AthletesPage() {
               Retirer
             </button>
           </div>
+          <PartageBloc athleteId={a.id} prenom={a.prenom} />
         </div>
       ))}
       <form className="card" onSubmit={add}>
@@ -129,6 +132,107 @@ export function AthletesPage() {
         </button>
       </form>
     </Page>
+  )
+}
+
+/* ------------------------------ Partage public ------------------------------ */
+/** Lien secret vers le portrait public de l'athlète (famille, entraîneur). Géré en ligne seulement. */
+function PartageBloc({ athleteId, prenom }: { athleteId: string; prenom: string }) {
+  const { compte } = useAuth()
+  const [partages, setPartages] = useState<Partage[] | null>(null)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [copie, setCopie] = useState<string | null>(null)
+  const enLigne = isOnline()
+
+  async function recharger() {
+    try {
+      setPartages(await listerPartages(athleteId))
+      setErreur(null)
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : String(e))
+    }
+  }
+  useEffect(() => {
+    void recharger()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteId])
+
+  async function action(fn: () => Promise<unknown>) {
+    setBusy(true)
+    try {
+      await fn()
+      await recharger()
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function copier(p: Partage) {
+    const url = urlPartage(p.jeton)
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopie(p.id)
+      setTimeout(() => setCopie(null), 2000)
+    } catch {
+      prompt('Copie ce lien :', url)
+    }
+  }
+  async function partager(p: Partage) {
+    const url = urlPartage(p.jeton)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Suivi de ${prenom} – patinage de vitesse`, text: `Les résultats de ${prenom} en patinage de vitesse`, url })
+      } catch {
+        /* annulé */
+      }
+    } else await copier(p)
+  }
+
+  return (
+    <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+      <div className="label" style={{ marginBottom: 6 }}>
+        Partage avec la famille
+      </div>
+      {!enLigne && <small>Connexion internet requise pour gérer les liens.</small>}
+      {erreur && <div className="error">{erreur}</div>}
+      {partages?.map((p) => (
+        <div key={p.id} className="notice" style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="grow" style={{ minWidth: 0, fontWeight: 600 }}>
+              {p.libelle ?? 'Lien'}
+              {!p.actif && <span className="badge warn" style={{ marginLeft: 8 }}>Désactivé</span>}
+            </span>
+            <small>
+              {p.nb_acces} ouverture{p.nb_acces > 1 ? 's' : ''}
+              {p.dernier_acces_a ? ` · ${fmtDate(p.dernier_acces_a)}` : ''}
+            </small>
+          </div>
+          <a href={urlPartage(p.jeton)} target="_blank" rel="noreferrer" className="mono" style={{ fontSize: '0.8rem', wordBreak: 'break-all', display: 'block', margin: '4px 0 8px' }}>
+            {urlPartage(p.jeton)}
+          </a>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <button className="btn-primary btn-sm" onClick={() => partager(p)} disabled={!p.actif}>
+              Partager
+            </button>
+            <button className="btn-sm" onClick={() => copier(p)} disabled={!p.actif}>
+              {copie === p.id ? 'Copié ✓' : 'Copier'}
+            </button>
+            <button className="btn-sm" onClick={() => action(() => basculerPartage(p.id, !p.actif))} disabled={busy || !enLigne}>
+              {p.actif ? 'Désactiver' : 'Réactiver'}
+            </button>
+            <button className="btn-danger btn-sm" onClick={() => confirm('Supprimer ce lien ? Il cessera de fonctionner pour tout le monde.') && action(() => supprimerPartage(p.id))} disabled={busy || !enLigne}>
+              Supprimer
+            </button>
+          </div>
+        </div>
+      ))}
+      {partages && partages.length === 0 && <small style={{ display: 'block', marginBottom: 8 }}>Aucun lien. Un lien donne accès, en lecture seule, aux temps, aux résultats par compétition et aux vidéos de {prenom}.</small>}
+      <button className="btn-sm" onClick={() => compte && action(() => creerPartage(compte.id, athleteId))} disabled={busy || !enLigne || !compte}>
+        + Créer un lien de partage
+      </button>
+    </div>
   )
 }
 

@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import ChronoPage from './pages/Chrono'
 import ChronoEditPage from './pages/ChronoEdit'
@@ -8,6 +8,7 @@ import { CoursePage, EpreuvePage } from './pages/Epreuve'
 import HistoriquePage from './pages/Historique'
 import HomePage from './pages/Home'
 import LoginPage, { OnboardingPage } from './pages/Login'
+import PartagePage from './pages/Partage'
 import { AthletesPage, CircuitsPage, DistancesPage, PistesPage, PlusPage, SaisonsPage } from './pages/Plus'
 import SaisiePage from './pages/Saisie'
 
@@ -48,11 +49,25 @@ function Gate() {
   )
 }
 
+/** Les pages publiques (/partage/:jeton) ne passent pas par la connexion ni par l'onboarding. */
+function Root() {
+  const loc = useLocation()
+  if (loc.pathname.startsWith('/partage/')) {
+    return (
+      <Routes>
+        <Route path="/partage/:jeton" element={<PartagePage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    )
+  }
+  return <Gate />
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <HashRouter>
-        <Gate />
+        <Root />
       </HashRouter>
     </AuthProvider>
   )

@@ -312,8 +312,8 @@ export default function ChronoEditPage() {
             <Field label="Ressenti (1–5)">
               <Ressenti value={participation.ressenti} onChange={(v) => patchParticipation({ ressenti: v })} />
             </Field>
-            <Field label="Lien vidéo">
-              <input type="url" defaultValue={participation.url_video ?? ''} onBlur={(e) => patchParticipation({ url_video: e.target.value || null })} placeholder="https://" />
+            <Field label="Vidéo (lien YouTube)" hint="Lisible dans la page partagée avec la famille">
+              <input type="url" inputMode="url" defaultValue={participation.url_video ?? ''} onBlur={(e) => patchParticipation({ url_video: e.target.value || null })} placeholder="https://youtu.be/…" />
             </Field>
             <Field label="Commentaire sur la course">
               <textarea defaultValue={participation.commentaire ?? ''} onBlur={(e) => patchParticipation({ commentaire: e.target.value || null })} />

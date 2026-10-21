@@ -1,7 +1,7 @@
 # Patinage – Suivi de performance : état de l'application
 
 > Document de référence, **à mettre à jour à chaque modification** (voir `CLAUDE.md`).
-> Dernière mise à jour : 2026-10-21 (commit `e043c46`). Version déployée : https://plpaquin-ux.github.io/patinage-app/
+> Dernière mise à jour : 2026-10-21 (partage public). Version déployée : https://plpaquin-ux.github.io/patinage-app/
 
 ## 1. Objectif
 
@@ -29,6 +29,8 @@ src/
   auth/AuthContext.tsx     Session Supabase, comptes de l'usager, création/sélection de compte
   components/Layout.tsx    Page (barre du haut + pastille sync + nav du bas), Field, Empty, SyncPill
   components/TimeInput.tsx Saisie de temps en texte libre (« 45.123 », « 1:23.45 ») → ms
+  components/Chart.tsx     Graphique SVG d'évolution (partagé par Historique et la page publique)
+  components/VideoModal.tsx Lecteur vidéo en modale (YouTube intégré, lien externe sinon) + icône ▶
   lib/types.ts             Types miroir des tables, enums, libellés FR, SYNC_TABLES, SERVER_ONLY_COLUMNS
   lib/supabase.ts          Client Supabase (schema: 'patinage')
   lib/db.ts                Schéma Dexie (v2), tables + outbox + meta
@@ -36,6 +38,8 @@ src/
   lib/repo.ts              create / update / softDelete (local + mise en file), compte courant, uuid
   lib/hooks.ts             Requêtes réactives (useLiveQuery) par table, athlète par défaut
   lib/time.ts              fmtMs, parseTime, dates locales, retenu(), longueurPiste(), nbToursAttendus()
+  lib/video.ts             Reconnaissance des liens YouTube (watch, youtu.be, shorts, t=) → URL d'intégration
+  lib/partage.ts           Liens de partage public (table `partage`, en ligne seulement) + urlPartage()
   lib/stopwatch.ts         Chrono à horodatages absolus, persistant, Wake Lock, fusion de tours
   pages/
     Login.tsx              Connexion / inscription ; OnboardingPage (choix ou création de compte)
@@ -47,13 +51,16 @@ src/
     Saisie.tsx             Saisie rapide d'un résultat passé (sans chrono)
     Entrainement.tsx       Séances d'entraînement et leurs chronos
     Historique.tsx         Records, graphique d'évolution, tableau, filtres (piste, distance, longueur)
-    Plus.tsx               Menu, compte, Athlètes, Pistes, Circuits, Distances (programme), Saisons
+    Plus.tsx               Menu, compte, Athlètes (+ liens de partage), Pistes, Circuits, Distances (programme), Saisons
+    Partage.tsx            Page publique /partage/:jeton (sans connexion) : portrait, records, évolution, courses par compétition, vidéos
 supabase/migrations/       Copies des migrations appliquées (la source de vérité est Supabase)
 .github/workflows/         Déploiement GitHub Pages
 ```
 
 ### Routes (HashRouter)
 `/` accueil · `/chrono` · `/chrono/:id` révision · `/competitions` · `/competitions/nouvelle` · `/competitions/:id` · `/competitions/:id/modifier` · `/epreuves/:id` · `/courses/:id` · `/saisie?athlete=&competition=` · `/entrainement` · `/entrainement/:id` · `/historique` · `/plus` · `/plus/{athletes|pistes|circuits|distances|saisons}`
+
+**Route publique** (hors « Gate », sans connexion) : `/partage/:jeton` → `PartagePage`. `App.tsx` route vers elle avant la vérification de session.
 
 ## 4. Modèle de données (schéma `patinage`)
 
@@ -71,6 +78,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
         │    └─ epreuve (distance, type_course, groupe)
         │         └─ course (type_manche, lettre_finale, ordre, heure, nb_patineurs, conditions)
         │              └─ participation (athlète, chrono, statut, rangs, points, couloir…)
+        ├─ partage (athlète, jeton secret, libellé, actif, nb_acces, dernier_acces_a) — lien public
         ├─ seance_entrainement (athlète, piste, date, type, objectif, ressenti)
         └─ chrono (athlète, contexte, séance|participation, distance, source, longueur_piste_m, temps…)
              └─ tour (numero, temps_tour_ms éditable, *_capture_* figés, position_peloton)
@@ -86,6 +94,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - **Résultat global** (`inscription_competition`) : classement final + nombre de patineurs dans la catégorie (« 3ᵉ / 24 ») + points cumulés.
 - **Suppression logique** (`deleted_at`) partout ; UUID générés côté client ; `updated_at` par trigger.
 - **RLS** sur toutes les tables par `compte_id` (`fn_mes_comptes`, `fn_mes_comptes_ecriture`) ; `compte` / `compte_membre` : propriétaire seulement pour gérer.
+- **Partage public** : un lien `#/partage/<jeton>` donne accès en lecture seule au portrait d'un athlète. Seule `fn_partage_lecture(jeton)` est appelable sans session ; elle retourne un JSON unique (athlète + catégorie/club de la saison courante, compétitions ordonnées par date décroissante avec résultat global et courses, temps des tours, vidéo = `participation.url_video` sinon `course.url_video`) et incrémente `nb_acces`. Jeton inconnu ou lien désactivé → `null`. La table `partage` n'est pas synchronisée hors ligne (gestion en ligne via `lib/partage.ts`) ; `anon` ne peut pas la lire. Un lien se désactive (réversible) ou se supprime (`deleted_at`).
 - **Fonctions** : `fn_creer_compte(nom)` (RPC, compte + membre + amorçage), `fn_amorcer_compte`, `fn_amorcer_programme`, `fn_points_bareme`, `fn_chrono_recalc`.
 - **Vues d'analyse** (security_invoker) : `v_participation_detail` (ligne plate par course avec contexte, longueur, tours théoriques, résultat global), `v_tour_detail`, `v_meilleur_temps`, `v_meilleur_temps_saison`, `v_entrainement_detail`.
 
@@ -96,6 +105,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 4. `patinage_longueur_sans_piste` – la piste ne participe plus au calcul de la longueur
 5. `patinage_circuit_distance` – programme par circuit + `fn_amorcer_programme`
 6. `patinage_nb_participants` – `inscription_competition.nb_participants`, vue enrichie du résultat global
+7. `patinage_partage_public` – table `partage` (jeton base64url de 24 caractères généré par `fn_partage_jeton`), fonction `fn_partage_lecture(jeton)` (security definer, exécutable par `anon`)
 
 ## 5. Synchronisation hors ligne
 
@@ -122,7 +132,8 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - **Saisie rapide** (`/saisie`) : compétition existante ou nouvelle, distance (programme du circuit), manche, temps officiel, rang, statut, points, patineurs au départ, commentaire, classement final / nb dans la catégorie ; « Enregistrer et saisir le suivant » ; refus des doublons.
 - **Entraînement** : séances (date, piste, type, objectif, ressenti) et chronos libres.
 - **Historique** : par athlète, type de piste, distance ; record et dernier temps ; filtre par longueur de tour (avertissement si mélange) ; option entraînements ; graphique SVG (une série, infobulle au toucher) ; tableau.
-- **Plus** : compte (changer, recharger les données, déconnexion), Athlètes, Arénas et pistes, Circuits (longueur du tour), Distances (libellé, tours par défaut, circuits où elle se court), Saisons — tous modifiables.
+- **Plus** : compte (changer, recharger les données, déconnexion), Athlètes (+ bloc « Partage avec la famille » : créer / partager (Web Share) / copier / désactiver / supprimer un lien, nombre d'ouvertures), Arénas et pistes, Circuits (longueur du tour), Distances (libellé, tours par défaut, circuits où elle se court), Saisons — tous modifiables.
+- **Page publique** (`/partage/:jeton`) : sans connexion ni barre de navigation ; recharge au retour au premier plan (suivi en direct pendant une compétition) et bouton ↻. Onglet *Portrait* : compteurs (compétitions, courses, podiums = top 3 d'une finale, vidéos), CP/LP, cartes « Meilleurs temps » par distance (distinguées par longueur de tour si plusieurs ; dernier temps et écart), touche → graphique d'évolution + tableau. Onglet *Compétitions* : cartes repliables (la plus récente ouverte ; badges « En cours » / « À venir »), résultat global, courses regroupées par épreuve (manche, rang / nb, temps, statut, ▶ vidéo), touche une course → temps des tours, commentaire, points. Vidéos : modale avec lecteur YouTube intégré (`youtube-nocookie`, autoplay, `t=` respecté) sans quitter la page ; lien non YouTube → bouton d'ouverture. Champ « Vidéo (lien YouTube) » dans la révision de chrono, la fiche de manche et la saisie rapide.
 
 ## 8. Conventions
 
@@ -144,12 +155,14 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 | 2026-10-21 | Saisie rapide de résultats passés |
 | 2026-10-21 | Dates seules en heure locale ; fiche chrono : date de course vs date de saisie |
 | 2026-10-21 | Nombre de patineurs dans la catégorie (résultat global) |
+| 2026-10-21 | Page publique de partage (`/partage/:jeton`) : portrait, records, évolution, courses par compétition, lecteur YouTube en modale ; liens gérés dans Plus › Athlètes ; champ vidéo dans la saisie rapide |
 
 ## 10. Pistes d'évolution
 
 - Calcul automatique des points via `bareme_points` (tables prêtes, pas d'écran).
 - Import des résultats officiels PVQ (`url_resultats`, `numero_course` prévus).
-- Partage en lecture (rôle `lecteur` dans le modèle) ; invitation d'un membre.
+- Partage en lecture **authentifié** (rôle `lecteur` dans le modèle) ; invitation d'un membre. (Le partage public par lien existe.)
+- Page publique : entraînements, comparaison d'une saison à l'autre, expiration des liens.
 - Équipement (lames, affûtage) : table prête, pas d'écran.
 - Position dans le peloton par tour (`tour.position_peloton`) : champ prêt, pas de saisie.
 - Export CSV / tableau de bord d'analyse (vues SQL prêtes).

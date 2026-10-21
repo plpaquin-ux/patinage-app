@@ -47,6 +47,7 @@ export default function SaisiePage() {
   const [points, setPoints] = useState<number | null>(null)
   const [nbPatineurs, setNbPatineurs] = useState<number | null>(null)
   const [commentaire, setCommentaire] = useState('')
+  const [urlVideo, setUrlVideo] = useState('')
   const [rangFinal, setRangFinal] = useState<number | null>(null)
   const [nbParticipants, setNbParticipants] = useState<number | null>(null)
   const [journal, setJournal] = useState<{ id: string; texte: string }[]>([])
@@ -194,7 +195,7 @@ export default function SaisiePage() {
         segments_relais: null,
         coequipiers_relais: null,
         ressenti: null,
-        url_video: null,
+        url_video: urlVideo.trim() || null,
         commentaire: commentaire.trim() || null,
       })
       setJournal((j) => [
@@ -207,6 +208,7 @@ export default function SaisiePage() {
       setPoints(null)
       setStatut('termine')
       setCommentaire('')
+      setUrlVideo('')
       setNbPatineurs(null)
     } catch (err) {
       setErreur(err instanceof Error ? err.message : String(err))
@@ -335,6 +337,9 @@ export default function SaisiePage() {
           </div>
           <Field label="Commentaire">
             <input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} placeholder="ex. chute au 3e tour, repêchée" />
+          </Field>
+          <Field label="Vidéo (lien YouTube)" hint="Visible dans la page partagée avec la famille">
+            <input type="url" inputMode="url" value={urlVideo} onChange={(e) => setUrlVideo(e.target.value)} placeholder="https://youtu.be/…" />
           </Field>
           <div className="grid2">
             <Field label="Classement final (compétition)" hint="Facultatif, une seule fois par compétition">

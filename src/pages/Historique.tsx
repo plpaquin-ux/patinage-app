@@ -1,14 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Chart } from '../components/Chart'
 import { Empty, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import { getDefaultAthleteId, useAthletes, useDistances } from '../lib/hooks'
 import { alive } from '../lib/repo'
-import { fmtDate, fmtDelta, fmtLongueur, fmtMs, longueurPiste, parseDateLocale, retenu } from '../lib/time'
+import { fmtDate, fmtDelta, fmtLongueur, fmtMs, longueurPiste, retenu } from '../lib/time'
 import { LIBELLES, mancheLabel, type Chrono, type Course, type Participation, type TypePiste } from '../lib/types'
 
 interface Point {
+  id: string
   chrono: Chrono
   part?: Participation
   course?: Course
@@ -61,7 +63,7 @@ export default function HistoriquePage() {
       const circuit = comp?.circuit_id ? await db.circuit.get(comp.circuit_id) : undefined
       const date = course?.debutee_a ?? course?.prevue_a ?? comp?.date_debut ?? ch.debute_a ?? ch.created_at
       const longueur = ch.longueur_piste_m ?? longueurPiste(comp, circuit, piste)
-      out.push({ chrono: ch, part, course, competition: comp?.nom, piste: piste?.nom, date, temps: t, longueur })
+      out.push({ id: ch.id, chrono: ch, part, course, competition: comp?.nom, piste: piste?.nom, date, temps: t, longueur })
     }
     return out.sort((a, b) => a.date.localeCompare(b.date))
   }, [chronos, distanceId, inclureEntrainement])
@@ -143,7 +145,17 @@ export default function HistoriquePage() {
           {pts && pts.length >= 2 && (
             <div className="card" style={{ marginTop: 12 }}>
               <h3>Évolution · {distance?.libelle}{longueurFiltre !== 'toutes' ? ` · tour de ${fmtLongueur(longueurFiltre)}` : ''}</h3>
-              <Chart points={pts} />
+              <Chart
+                points={pts}
+                renderInfo={(s) => (
+                  <>
+                    <strong className="mono">{fmtMs(s.temps)}</strong> · {fmtDate(s.date)}
+                    {s.competition ? ` · ${s.competition}` : ' · Entraînement'}
+                    {s.course ? ` · ${mancheLabel(s.course)}` : ''}
+                    {s.part?.rang_officiel ? ` · ${s.part.rang_officiel}ᵉ` : ''} · <Link to={`/chrono/${s.chrono.id}`}>ouvrir</Link>
+                  </>
+                )}
+              />
               <small>Temps retenu par course (officiel, sinon ajusté, sinon calculé). Touche un point pour les détails.</small>
             </div>
           )}
@@ -190,69 +202,5 @@ export default function HistoriquePage() {
         </>
       )}
     </Page>
-  )
-}
-
-/* Graphique SVG : une série, axe y = temps (plus bas = mieux), infobulle au toucher. */
-function Chart({ points }: { points: Point[] }) {
-  const [sel, setSel] = useState<number | null>(null)
-  const W = 640
-  const H = 260
-  const m = { t: 16, r: 16, b: 36, l: 56 }
-  const xs = points.map((p) => parseDateLocale(p.date).getTime())
-  const ys = points.map((p) => p.temps)
-  const x0 = Math.min(...xs)
-  const x1 = Math.max(...xs)
-  const yMin = Math.min(...ys)
-  const yMax = Math.max(...ys)
-  const pad = Math.max((yMax - yMin) * 0.15, 500)
-  const y0 = yMin - pad
-  const y1 = yMax + pad
-  const X = (v: number) => m.l + (x1 === x0 ? (W - m.l - m.r) / 2 : ((v - x0) / (x1 - x0)) * (W - m.l - m.r))
-  const Y = (v: number) => m.t + ((v - y0) / (y1 - y0)) * (H - m.t - m.b)
-  const path = points.map((p, i) => `${i ? 'L' : 'M'}${X(xs[i]).toFixed(1)},${Y(p.temps).toFixed(1)}`).join(' ')
-  const bestIdx = ys.indexOf(yMin)
-  const yTicks = 4
-  const ticks = Array.from({ length: yTicks + 1 }, (_, i) => y0 + ((y1 - y0) * i) / yTicks)
-  const s = sel != null ? points[sel] : null
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Évolution des temps">
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line className="axis" x1={m.l} x2={W - m.r} y1={Y(t)} y2={Y(t)} strokeDasharray={i === 0 || i === yTicks ? undefined : '2 4'} />
-            <text className="tick" x={m.l - 6} y={Y(t) + 3} textAnchor="end">
-              {fmtMs(t, { decimals: 2 })}
-            </text>
-          </g>
-        ))}
-        <text className="tick" x={m.l} y={H - 8}>
-          {fmtDate(points[0].date)}
-        </text>
-        <text className="tick" x={W - m.r} y={H - 8} textAnchor="end">
-          {fmtDate(points.at(-1)!.date)}
-        </text>
-        <path className="line" d={path} />
-        {points.map((p, i) => (
-          <g key={p.chrono.id} onClick={() => setSel(sel === i ? null : i)} style={{ cursor: 'pointer' }}>
-            <circle cx={X(xs[i])} cy={Y(p.temps)} r={18} fill="transparent" />
-            <circle className={`pt${i === bestIdx ? ' best' : ''}`} cx={X(xs[i])} cy={Y(p.temps)} r={sel === i ? 7 : 5} stroke="var(--bg-2)" strokeWidth={2} />
-          </g>
-        ))}
-        <text className="tick" x={X(xs[bestIdx])} y={Y(yMin) + 18} textAnchor="middle" style={{ fill: 'var(--ok)', fontWeight: 700 }}>
-          {fmtMs(yMin)}
-        </text>
-      </svg>
-      {s && (
-        <div className="notice" style={{ marginTop: 6 }}>
-          <strong className="mono">{fmtMs(s.temps)}</strong> · {fmtDate(s.date)}
-          {s.competition ? ` · ${s.competition}` : ' · Entraînement'}
-          {s.course ? ` · ${mancheLabel(s.course)}` : ''}
-          {s.part?.rang_officiel ? ` · ${s.part.rang_officiel}ᵉ` : ''} ·{' '}
-          <Link to={`/chrono/${s.chrono.id}`}>ouvrir</Link>
-        </div>
-      )}
-    </div>
   )
 }
