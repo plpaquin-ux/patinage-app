@@ -136,9 +136,17 @@ export default function ChronoEditPage() {
               {athlete?.prenom} {athlete?.nom}
             </div>
             <small>
-              {competition ? `${competition.nom} · ` : ''}
-              {piste ? `${piste.nom} · ` : ''}
-              {fmtDate(chrono.debute_a ?? chrono.created_at, true)}
+              {competition
+                ? `${competition.nom} · ${course?.debutee_a ? fmtDate(course.debutee_a, true) : course?.prevue_a ? fmtDate(course.prevue_a, true) : fmtDate(competition.date_debut)}`
+                : seance
+                  ? `Entraînement · ${fmtDate(seance.date_seance, true)}`
+                  : fmtDate(chrono.debute_a ?? chrono.created_at, true)}
+              {piste ? ` · ${piste.nom}` : ''}
+            </small>
+            <small style={{ display: 'block', opacity: 0.75 }}>
+              {chrono.source === 'chrono_app' && chrono.debute_a
+                ? `Chrono pris le ${fmtDate(chrono.debute_a, true)}`
+                : `Saisi le ${fmtDate(chrono.created_at, true)}`}
             </small>
           </div>
           <div style={{ textAlign: 'right' }}>
