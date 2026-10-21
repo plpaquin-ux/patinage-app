@@ -63,6 +63,14 @@ const Icon = {
       <path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z" />
     </svg>
   ),
+  dashboard: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" rx="1.5" />
+      <rect x="14" y="3" width="7" height="5" rx="1.5" />
+      <rect x="14" y="12" width="7" height="9" rx="1.5" />
+      <rect x="3" y="16" width="7" height="5" rx="1.5" />
+    </svg>
+  ),
   chrono: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="13" r="8" />
@@ -93,6 +101,9 @@ export function BottomNav() {
     <nav className="bottomnav">
       <NavLink to="/" end>
         {Icon.home}Accueil
+      </NavLink>
+      <NavLink to="/tableau" aria-label="Tableau de bord">
+        {Icon.dashboard}Tableau
       </NavLink>
       <NavLink to="/chrono">{Icon.chrono}Chrono</NavLink>
       <NavLink to="/competitions">{Icon.trophy}Compétitions</NavLink>

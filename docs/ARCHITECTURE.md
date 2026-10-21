@@ -31,6 +31,7 @@ src/
   components/TimeInput.tsx Saisie de temps en texte libre (« 45.123 », « 1:23.45 ») → ms
   components/Chart.tsx     Graphique SVG d'évolution (partagé par Historique et la page publique)
   components/VideoModal.tsx Lecteur vidéo en modale (YouTube intégré, lien externe sinon) + icône ▶
+  components/TableauDeBord.tsx Vue « tableau de bord » d'un athlète (onglets Portrait / Compétitions, vidéos) — partagée par /tableau et /partage
   lib/types.ts             Types miroir des tables, enums, libellés FR, SYNC_TABLES, SERVER_ONLY_COLUMNS
   lib/supabase.ts          Client Supabase (schema: 'patinage')
   lib/db.ts                Schéma Dexie (v2), tables + outbox + meta
@@ -40,10 +41,12 @@ src/
   lib/time.ts              fmtMs, parseTime, dates locales, retenu(), longueurPiste(), nbToursAttendus()
   lib/video.ts             Reconnaissance des liens YouTube (watch, youtu.be, shorts, t=) → URL d'intégration
   lib/partage.ts           Liens de partage public (table `partage`, en ligne seulement) + urlPartage()
+  lib/portrait.ts          Types du « portrait » (JSON de fn_partage_lecture) + portraitLocal() : même structure calculée depuis IndexedDB
   lib/stopwatch.ts         Chrono à horodatages absolus, persistant, Wake Lock, fusion de tours
   pages/
     Login.tsx              Connexion / inscription ; OnboardingPage (choix ou création de compte)
     Home.tsx               Accueil : raccourcis, à venir, derniers chronos, compétitions récentes
+    TableauDeBord.tsx      Page /tableau : tableau de bord interne (choix de l'athlète, hors ligne, liens vers les fiches chrono)
     Chrono.tsx             Préparation (athlète, contexte, distance, longueur du tour) + chrono en direct
     ChronoEdit.tsx         Révision d'un chrono : tours éditables, totaux, officiel, résultat de course
     Competitions.tsx       Liste, formulaire, détail (épreuves, résultat global, groupes), EpreuveForm
@@ -52,13 +55,13 @@ src/
     Entrainement.tsx       Séances d'entraînement et leurs chronos
     Historique.tsx         Records, graphique d'évolution, tableau, filtres (piste, distance, longueur)
     Plus.tsx               Menu, compte, Athlètes (+ liens de partage), Pistes, Circuits, Distances (programme), Saisons
-    Partage.tsx            Page publique /partage/:jeton (sans connexion) : portrait, records, évolution, courses par compétition, vidéos
+    Partage.tsx            Page publique /partage/:jeton (sans connexion) : charge le portrait via RPC et rend TableauDeBord
 supabase/migrations/       Copies des migrations appliquées (la source de vérité est Supabase)
 .github/workflows/         Déploiement GitHub Pages
 ```
 
 ### Routes (HashRouter)
-`/` accueil · `/chrono` · `/chrono/:id` révision · `/competitions` · `/competitions/nouvelle` · `/competitions/:id` · `/competitions/:id/modifier` · `/epreuves/:id` · `/courses/:id` · `/saisie?athlete=&competition=` · `/entrainement` · `/entrainement/:id` · `/historique` · `/plus` · `/plus/{athletes|pistes|circuits|distances|saisons}`
+`/` accueil · `/tableau` tableau de bord · `/chrono` · `/chrono/:id` révision · `/competitions` · `/competitions/nouvelle` · `/competitions/:id` · `/competitions/:id/modifier` · `/epreuves/:id` · `/courses/:id` · `/saisie?athlete=&competition=` · `/entrainement` · `/entrainement/:id` · `/historique` · `/plus` · `/plus/{athletes|pistes|circuits|distances|saisons}`
 
 **Route publique** (hors « Gate », sans connexion) : `/partage/:jeton` → `PartagePage`. `App.tsx` route vers elle avant la vérification de session.
 
@@ -133,6 +136,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - **Entraînement** : séances (date, piste, type, objectif, ressenti) et chronos libres.
 - **Historique** : par athlète, type de piste, distance ; record et dernier temps ; filtre par longueur de tour (avertissement si mélange) ; option entraînements ; graphique SVG (une série, infobulle au toucher) ; tableau.
 - **Plus** : compte (changer, recharger les données, déconnexion), Athlètes (+ bloc « Partage avec la famille » : créer / partager (Web Share) / copier / désactiver / supprimer un lien, nombre d'ouvertures), Arénas et pistes, Circuits (longueur du tour), Distances (libellé, tours par défaut, circuits où elle se court), Saisons — tous modifiables.
+- **Tableau de bord** (`/tableau`, 2ᵉ onglet de la barre du bas, icône grille) : même vue que la page publique, calculée hors ligne par `portraitLocal()` (réactive via `useLiveQuery`), sélecteur d'athlète (mémorisé comme athlète par défaut), liens vers la fiche chrono (date dans le tableau d'évolution, bouton dans le détail d'une course). **La structure du portrait existe en deux exemplaires (SQL `fn_partage_lecture` et `portraitLocal`) : toute évolution se fait des deux côtés.**
 - **Page publique** (`/partage/:jeton`) : sans connexion ni barre de navigation ; recharge au retour au premier plan (suivi en direct pendant une compétition) et bouton ↻. Onglet *Portrait* : compteurs (compétitions, courses, meilleur classement final en compétition « 7ᵉ / 20 », vidéos), CP/LP, cartes « Meilleurs temps » par distance (distinguées par longueur de tour si plusieurs ; dernier temps et écart), touche → graphique d'évolution + tableau. Onglet *Compétitions* : cartes repliables (la plus récente ouverte ; badges « En cours » / « À venir »), résultat global, courses regroupées par épreuve (manche, rang / nb, temps, statut, ▶ vidéo), touche une course → temps des tours, commentaire, points. Médailles 🥇🥈🥉 seulement sur le classement final et les finales A (un top 3 en finale D n'est pas un podium). Vidéos : modale avec lecteur YouTube intégré (`youtube-nocookie`, autoplay, `t=` respecté) sans quitter la page ; lien non YouTube → bouton d'ouverture. Champ « Vidéo (lien YouTube) » dans la révision de chrono, la fiche de manche et la saisie rapide.
 
 ## 8. Conventions
@@ -140,7 +144,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - Français partout (UI, commentaires, commits) ; dates affichées en `fr-CA`, dates seules parsées en heure locale (`parseDateLocale`) pour éviter le décalage UTC.
 - Toute nouvelle table : UUID, `compte_id`, `created_at/updated_at/deleted_at`, trigger `updated_at`, RLS via `fn_enable_rls_compte`, grants ; ajouter à `SYNC_TABLES`, `TableMap`, Dexie (nouvelle version de schéma), hooks.
 - Migrations : appliquées sur Supabase (nommées `patinage_*`), copie dans `supabase/migrations/`.
-- Vérification avant déploiement : `npm run typecheck`, `npm run build`, test de fumée Playwright (Supabase simulé) sur viewport mobile.
+- Vérification avant déploiement : `npm run typecheck`, `npm run build`, test de fumée Playwright (Supabase simulé : session préchargée dans `localStorage` sous `sb-<ref>-auth-token`, `patinage.compte_id`, `patinage.comptes` ; routes `/auth/v1/*` et `/rest/v1/<table>` interceptées) sur viewport mobile et bureau.
 
 ## 9. Historique des changements
 
@@ -155,6 +159,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 | 2026-10-21 | Saisie rapide de résultats passés |
 | 2026-10-21 | Dates seules en heure locale ; fiche chrono : date de course vs date de saisie |
 | 2026-10-21 | Nombre de patineurs dans la catégorie (résultat global) |
+| 2026-10-21 | Tableau de bord interne (`/tableau`, onglet « Tableau » après Accueil) réutilisant la vue partagée ; correctif d'alignement des en-têtes de compétition (`.grow` générique, `.comp-head` aligné à gauche) |
 | 2026-10-21 | Page publique : « Podiums » remplacé par « Meilleur classement » (rang final), médailles limitées aux finales A |
 | 2026-10-21 | Page publique de partage (`/partage/:jeton`) : portrait, records, évolution, courses par compétition, lecteur YouTube en modale ; liens gérés dans Plus › Athlètes ; champ vidéo dans la saisie rapide |
 

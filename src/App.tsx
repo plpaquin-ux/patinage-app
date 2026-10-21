@@ -11,6 +11,7 @@ import LoginPage, { OnboardingPage } from './pages/Login'
 import PartagePage from './pages/Partage'
 import { AthletesPage, CircuitsPage, DistancesPage, PistesPage, PlusPage, SaisonsPage } from './pages/Plus'
 import SaisiePage from './pages/Saisie'
+import TableauDeBordPage from './pages/TableauDeBord'
 
 function Gate() {
   const { loading, session, compte, comptesLoaded } = useAuth()
@@ -26,6 +27,7 @@ function Gate() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/tableau" element={<TableauDeBordPage />} />
       <Route path="/chrono" element={<ChronoPage />} />
       <Route path="/chrono/:id" element={<ChronoEditPage />} />
       <Route path="/competitions" element={<CompetitionsPage />} />

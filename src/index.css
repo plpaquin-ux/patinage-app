@@ -153,7 +153,7 @@ small,
   background: var(--bg-2);
   border-top: 1px solid var(--line);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   z-index: 10;
 }
 .bottomnav a {
@@ -163,8 +163,10 @@ small,
   justify-content: center;
   gap: 2px;
   color: var(--fg-3);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 600;
+  white-space: nowrap;
+  min-width: 0;
 }
 .bottomnav a svg {
   width: 24px;
@@ -204,7 +206,7 @@ small,
 .row:active {
   background: var(--bg-3);
 }
-.row .grow {
+.grow {
   flex: 1;
   min-width: 0;
 }
@@ -724,6 +726,7 @@ input.mono {
   display: flex;
   gap: 12px;
   align-items: center;
+  justify-content: flex-start;
   text-align: left;
   background: transparent;
   color: inherit;
