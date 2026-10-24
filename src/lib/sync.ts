@@ -45,6 +45,7 @@ function stripServerColumns(table: SyncTable, payload: Record<string, unknown>) 
 /** Envoie la file d'attente, dans l'ordre, en s'arrêtant à la première erreur réseau. */
 async function pushOutbox(): Promise<void> {
   const items = await db.outbox.orderBy('id').toArray()
+  const skipped: string[] = []
   for (const item of items) {
     const payload = stripServerColumns(item.table, item.payload)
     const { error } = await supabase.from(item.table).upsert(payload, { onConflict: 'id' })
@@ -55,14 +56,51 @@ async function pushOutbox(): Promise<void> {
         last_error: `${error.code ?? ''} ${error.message}`.trim(),
       })
       if (permanent && item.attempts >= 5) {
-        // Après 5 tentatives sur une erreur de données, on retire l'élément pour ne pas bloquer la file.
-        await db.outbox.delete(item.id!)
+        // Erreur de données persistante : on passe au suivant pour ne pas bloquer la file,
+        // mais on GARDE l'élément (jamais de perte silencieuse). « Renvoyer les données locales »
+        // dans Plus › Compte permet de le réessayer une fois la cause corrigée côté serveur.
+        skipped.push(`${item.table}: ${error.message}`)
         continue
       }
       throw new Error(`${item.table}/${item.row_id}: ${error.message}`)
     }
     await db.outbox.delete(item.id!)
   }
+  if (skipped.length > 0) {
+    // La sync continue (pull), mais l'erreur reste visible dans la pastille.
+    throw new Error(`${skipped.length} élément(s) refusé(s) par le serveur — ${skipped[0]}`)
+  }
+}
+
+/**
+ * Remet TOUTES les lignes locales dans la file d'envoi (upsert idempotent côté serveur).
+ * À utiliser quand des données n'ont jamais atteint le serveur (ex. refus RLS corrigé depuis).
+ * Retourne le nombre de lignes mises en file.
+ */
+export async function reenvoyerTout(): Promise<number> {
+  let n = 0
+  await db.transaction('rw', [...SYNC_TABLES.map((t) => db.table_(t)), db.outbox], async () => {
+    // On repart d'une file propre : les anciennes entrées seront recréées depuis les lignes locales.
+    await db.outbox.clear()
+    const now = new Date().toISOString()
+    for (const table of SYNC_TABLES) {
+      const rows = (await db.table_(table).toArray()) as Record<string, unknown>[]
+      for (const row of rows) {
+        await db.outbox.add({
+          table,
+          row_id: row.id as string,
+          payload: row,
+          created_at: now,
+          attempts: 0,
+          last_error: null,
+        })
+        n++
+      }
+    }
+  })
+  await refreshPending()
+  void syncNow()
+  return n
 }
 
 /** Récupère les lignes modifiées depuis la dernière sync, table par table. */

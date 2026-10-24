@@ -6,7 +6,7 @@ import { useAthletes, useCircuitDistances, useCircuits, useDistances, usePistes,
 import { create, softDelete, update } from '../lib/repo'
 import { basculerPartage, creerPartage, listerPartages, supprimerPartage, urlPartage, type Partage } from '../lib/partage'
 import { isOnline } from '../lib/supabase'
-import { resetPullMarkers, syncNow } from '../lib/sync'
+import { reenvoyerTout, resetPullMarkers, syncNow } from '../lib/sync'
 import { fmtDate, fmtLongueur } from '../lib/time'
 import { LIBELLES, type Circuit, type Piste, type Saison, type TypeCourse, type TypePiste } from '../lib/types'
 import { NumInput } from './ChronoEdit'
@@ -27,6 +27,13 @@ export function PlusPage() {
     await resetPullMarkers()
     await syncNow()
     setBusy(false)
+  }
+  async function renvoyer() {
+    if (!confirm('Renvoyer toutes les données de ce téléphone au serveur ? Rien n’est effacé : les lignes déjà présentes sont simplement mises à jour.')) return
+    setBusy(true)
+    const n = await reenvoyerTout()
+    setBusy(false)
+    alert(`${n} ligne(s) mise(s) en file d’envoi. La pastille indiquera « Synchronisé » quand tout sera passé.`)
   }
   return (
     <Page title="Plus">
@@ -61,6 +68,9 @@ export function PlusPage() {
         <div className="actions">
           <button onClick={recharger} disabled={busy}>
             {busy ? '…' : 'Recharger les données'}
+          </button>
+          <button onClick={renvoyer} disabled={busy}>
+            {busy ? '…' : 'Renvoyer les données locales'}
           </button>
           <button className="btn-danger" onClick={() => confirm('Se déconnecter ? Les données non synchronisées seront perdues.') && signOut()}>
             Se déconnecter
