@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { Empty, Field, Page } from '../components/Layout'
+import { db } from '../lib/db'
 import { useAthletes, useCircuitDistances, useCircuits, useDistances, usePistes, useSaisons } from '../lib/hooks'
 import { create, softDelete, update } from '../lib/repo'
 import { basculerPartage, creerPartage, listerPartages, supprimerPartage, urlPartage, type Partage } from '../lib/partage'
@@ -27,6 +28,16 @@ export function PlusPage() {
     await resetPullMarkers()
     await syncNow()
     setBusy(false)
+  }
+  async function deconnecter() {
+    setBusy(true)
+    await syncNow()
+    const pending = await db.outbox.count()
+    setBusy(false)
+    const msg = pending > 0
+      ? `ATTENTION : ${pending} modification(s) ne sont PAS synchronisées et seront perdues. Se déconnecter quand même ?`
+      : 'Se déconnecter ?'
+    if (confirm(msg)) await signOut()
   }
   async function renvoyer() {
     if (!confirm('Renvoyer toutes les données de ce téléphone au serveur ? Rien n’est effacé : les lignes déjà présentes sont simplement mises à jour.')) return
@@ -72,7 +83,7 @@ export function PlusPage() {
           <button onClick={renvoyer} disabled={busy}>
             {busy ? '…' : 'Renvoyer les données locales'}
           </button>
-          <button className="btn-danger" onClick={() => confirm('Se déconnecter ? Les données non synchronisées seront perdues.') && signOut()}>
+          <button className="btn-danger" onClick={deconnecter}>
             Se déconnecter
           </button>
         </div>

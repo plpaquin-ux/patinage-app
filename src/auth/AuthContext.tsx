@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { clearLocalData } from '../lib/db'
+import { clearLocalData, db } from '../lib/db'
 import { getCompteId, setCompteId } from '../lib/repo'
 import { isOnline, supabase } from '../lib/supabase'
 import { resetPullMarkers, startSyncLoop, syncNow } from '../lib/sync'
@@ -68,8 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(COMPTE_CACHE, JSON.stringify(list))
     const current = getCompteId()
     if (list.length > 0 && (!current || !list.some((c) => c.id === current))) {
-      // Bascule automatique sur un compte existant : on repart d'une base locale propre
-      await clearLocalData()
+      // Le compte mémorisé sur l'appareil n'existe plus (fusion, suppression, cache périmé) :
+      // on bascule sur un compte valide SANS jamais effacer des données non synchronisées.
+      // Le trigger serveur fn_corriger_compte réassigne le compte_id des lignes en attente.
+      const pending = await db.outbox.count()
+      if (pending === 0) await clearLocalData()
+      await resetPullMarkers()
       setCompteId(list[0].id)
       setCompteIdState(list[0].id)
     }
@@ -147,6 +151,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const selectCompte = useCallback(async (id: string) => {
+    // Changer de compte vide la base locale : on s'assure d'abord que tout est parti au serveur.
+    await syncNow()
+    const pending = await db.outbox.count()
+    if (pending > 0) {
+      alert(`${pending} modification(s) ne sont pas encore synchronisées. Réessayez quand la pastille indique « Synchronisé ».`)
+      return
+    }
     await clearLocalData()
     await resetPullMarkers()
     setCompteId(id)

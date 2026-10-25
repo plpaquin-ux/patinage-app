@@ -1,7 +1,7 @@
 # Patinage – Suivi de performance : état de l'application
 
 > Document de référence, **à mettre à jour à chaque modification** (voir `CLAUDE.md`).
-> Dernière mise à jour : 2026-10-21 (partage public). Version déployée : https://plpaquin-ux.github.io/patinage-app/
+> Dernière mise à jour : 2026-10-25 (robustesse de la synchronisation, fusion des comptes). Version déployée : https://plpaquin-ux.github.io/patinage-app/
 
 ## 1. Objectif
 
@@ -96,7 +96,8 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - **Programme par circuit** (`circuit_distance`) : le formulaire d'épreuve et la saisie rapide ne proposent que les distances du circuit ; repli sur le type de piste.
 - **Résultat global** (`inscription_competition`) : classement final + nombre de patineurs dans la catégorie (« 3ᵉ / 24 ») + points cumulés.
 - **Suppression logique** (`deleted_at`) partout ; UUID générés côté client ; `updated_at` par trigger.
-- **RLS** sur toutes les tables par `compte_id` (`fn_mes_comptes`, `fn_mes_comptes_ecriture`) ; `compte` / `compte_membre` : propriétaire seulement pour gérer.
+- **RLS** sur toutes les tables par `compte_id` (`fn_mes_comptes`, `fn_mes_comptes_ecriture`) ; `compte` / `compte_membre` : propriétaire seulement pour gérer (`fn_mes_comptes_proprietaire`). **Règle : une politique ne lit jamais sa propre table directement** (récursion infinie → erreur 500) ; toujours passer par une fonction `security definer`.
+- **Filet de sécurité `compte_id`** : trigger `trg_corriger_compte` (`fn_corriger_compte`, BEFORE INSERT/UPDATE, toutes les tables à `compte_id` sauf `compte_membre`) : si la ligne arrive avec un `compte_id` null ou qui n'appartient pas à l'usager (compte supprimé, cache périmé), il est remplacé par le compte valide le plus récent de l'usager au lieu de refuser l'écriture. Toute nouvelle table doit recevoir ce trigger (le `do` de la migration 8 est idempotent et peut être rejoué).
 - **Partage public** : un lien `#/partage/<jeton>` donne accès en lecture seule au portrait d'un athlète. Seule `fn_partage_lecture(jeton)` est appelable sans session ; elle retourne un JSON unique (athlète + catégorie/club de la saison courante, compétitions ordonnées par date décroissante avec résultat global et courses, temps des tours, vidéo = `participation.url_video` sinon `course.url_video`) et incrémente `nb_acces`. Jeton inconnu ou lien désactivé → `null`. La table `partage` n'est pas synchronisée hors ligne (gestion en ligne via `lib/partage.ts`) ; `anon` ne peut pas la lire. Un lien se désactive (réversible) ou se supprime (`deleted_at`).
 - **Fonctions** : `fn_creer_compte(nom)` (RPC, compte + membre + amorçage), `fn_amorcer_compte`, `fn_amorcer_programme`, `fn_points_bareme`, `fn_chrono_recalc`.
 - **Vues d'analyse** (security_invoker) : `v_participation_detail` (ligne plate par course avec contexte, longueur, tours théoriques, résultat global), `v_tour_detail`, `v_meilleur_temps`, `v_meilleur_temps_saison`, `v_entrainement_detail`.
@@ -109,11 +110,16 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 5. `patinage_circuit_distance` – programme par circuit + `fn_amorcer_programme`
 6. `patinage_nb_participants` – `inscription_competition.nb_participants`, vue enrichie du résultat global
 7. `patinage_partage_public` – table `partage` (jeton base64url de 24 caractères généré par `fn_partage_jeton`), fonction `fn_partage_lecture(jeton)` (security definer, exécutable par `anon`)
+8. `patinage_corriger_compte_orphelin` – `fn_corriger_compte` + trigger `trg_corriger_compte` sur toutes les tables (filet de sécurité `compte_id`)
+9. `patinage_compte_membre_sans_recursion` – `fn_mes_comptes_proprietaire`, politique `compte_membre_manage` réécrite sans récursion
+10. `patinage_fusion_comptes_famille` – migration de données (une fois) : fusion des deux comptes « Famille », dédoublonnage des référentiels, repointage des clés étrangères
 
 ## 5. Synchronisation hors ligne
 
 - Toute écriture passe par `repo.create/update/softDelete` : ligne écrite dans IndexedDB **puis** mise en file (`outbox`, une entrée par ligne, la dernière version gagne).
-- `sync.ts` : **push** (upsert par ligne, dans l'ordre, arrêt à la première erreur réseau ; les erreurs de données sont retirées après 5 tentatives) puis **pull** incrémental par table (`updated_at > dernier pull`, pages de 1000, les lignes avec une entrée en attente ne sont pas écrasées).
+- `sync.ts` : **push** (upsert par ligne, dans l'ordre, arrêt à la première erreur réseau ; une erreur de données persistante — RLS, contrainte — est **sautée après 5 tentatives mais jamais supprimée** de la file : la sync continue, l'erreur reste visible dans la pastille) puis **pull** incrémental par table (`updated_at > dernier pull`, pages de 1000, les lignes avec une entrée en attente ne sont pas écrasées).
+- **Principe : la base locale n'est jamais effacée tant que la file (`outbox`) n'est pas vide.** La bascule automatique de compte (compte mémorisé devenu invalide) réassigne le compte sans vider la base ; « Changer de compte » force une sync et refuse s'il reste des éléments en attente ; « Se déconnecter » affiche le nombre réel d'éléments non synchronisés avant de confirmer.
+- `reenvoyerTout()` (Plus › Compte › « Renvoyer les données locales ») : remet toutes les lignes locales dans la file (upsert idempotent côté serveur) — à utiliser si des données n'ont jamais atteint le serveur.
 - Colonnes jamais envoyées (`SERVER_ONLY_COLUMNS`) : `temps_retenu_ms`, `ecart_officiel_ms`, `nb_tours_enregistres`, `temps_calcule_ms`.
 - Déclencheurs : démarrage, retour en ligne, retour au premier plan, toutes les 2 min, 0,8 s après chaque écriture. Pastille d'état dans la barre du haut (Synchronisé / N en attente / Hors ligne / Erreur).
 - `localStorage` : compte courant, cache des comptes, athlète par défaut, dernière longueur de tour, état du chrono en cours.
@@ -135,7 +141,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - **Saisie rapide** (`/saisie`) : compétition existante ou nouvelle, distance (programme du circuit), manche, temps officiel, rang, statut, points, patineurs au départ, commentaire, classement final / nb dans la catégorie ; « Enregistrer et saisir le suivant » ; refus des doublons.
 - **Entraînement** : séances (date, piste, type, objectif, ressenti) et chronos libres.
 - **Historique** : par athlète, type de piste, distance ; record et dernier temps ; filtre par longueur de tour (avertissement si mélange) ; option entraînements ; graphique SVG (une série, infobulle au toucher) ; tableau.
-- **Plus** : compte (changer, recharger les données, déconnexion), Athlètes (+ bloc « Partage avec la famille » : créer / partager (Web Share) / copier / désactiver / supprimer un lien, nombre d'ouvertures), Arénas et pistes, Circuits (longueur du tour), Distances (libellé, tours par défaut, circuits où elle se court), Saisons — tous modifiables.
+- **Plus** : compte (changer, recharger les données, renvoyer les données locales, déconnexion), Athlètes (+ bloc « Partage avec la famille » : créer / partager (Web Share) / copier / désactiver / supprimer un lien, nombre d'ouvertures), Arénas et pistes, Circuits (longueur du tour), Distances (libellé, tours par défaut, circuits où elle se court), Saisons — tous modifiables.
 - **Tableau de bord** (`/tableau`, 2ᵉ onglet de la barre du bas, icône grille) : même vue que la page publique, calculée hors ligne par `portraitLocal()` (réactive via `useLiveQuery`), sélecteur d'athlète (mémorisé comme athlète par défaut), liens vers la fiche chrono (date dans le tableau d'évolution, bouton dans le détail d'une course). **La structure du portrait existe en deux exemplaires (SQL `fn_partage_lecture` et `portraitLocal`) : toute évolution se fait des deux côtés.**
 - **Page publique** (`/partage/:jeton`) : sans connexion ni barre de navigation ; recharge au retour au premier plan (suivi en direct pendant une compétition) et bouton ↻. Onglet *Portrait* : compteurs (compétitions, courses, meilleur classement final en compétition « 7ᵉ / 20 », vidéos), CP/LP, cartes « Meilleurs temps » par distance (distinguées par longueur de tour si plusieurs ; dernier temps et écart), touche → graphique d'évolution + tableau. Onglet *Compétitions* : cartes repliables (la plus récente ouverte ; badges « En cours » / « À venir »), résultat global, courses regroupées par épreuve (manche, rang / nb, temps, statut, ▶ vidéo), touche une course → temps des tours, commentaire, points. Médailles 🥇🥈🥉 seulement sur le classement final et les finales A (un top 3 en finale D n'est pas un podium). Vidéos : modale avec lecteur YouTube intégré (`youtube-nocookie`, autoplay, `t=` respecté) sans quitter la page ; lien non YouTube → bouton d'ouverture. Champ « Vidéo (lien YouTube) » dans la révision de chrono, la fiche de manche et la saisie rapide.
 
@@ -162,6 +168,8 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 | 2026-10-21 | Tableau de bord interne (`/tableau`, onglet « Tableau » après Accueil) réutilisant la vue partagée ; correctif d'alignement des en-têtes de compétition (`.grow` générique, `.comp-head` aligné à gauche) |
 | 2026-10-21 | Page publique : « Podiums » remplacé par « Meilleur classement » (rang final), médailles limitées aux finales A |
 | 2026-10-21 | Page publique de partage (`/partage/:jeton`) : portrait, records, évolution, courses par compétition, lecteur YouTube en modale ; liens gérés dans Plus › Athlètes ; champ vidéo dans la saisie rapide |
+| 2026-10-24 | **Incident en compétition** : `compte_id` périmé en `localStorage` → toutes les écritures refusées par le RLS, file de sync purgée après 5 tentatives (données intactes sur le téléphone seulement). Correctifs : trigger `fn_corriger_compte` (migration 8) ; la file ne jette plus rien ; bouton « Renvoyer les données locales » |
+| 2026-10-25 | Cause racine : politique `compte_membre_manage` récursive (erreur 500 depuis le 23) réécrite (migration 9). Fusion des deux comptes « Famille » et dédoublonnage des référentiels (migration 10). App : la base locale n'est jamais effacée s'il reste des éléments en attente (bascule de compte, changement de compte, déconnexion) |
 
 ## 10. Pistes d'évolution
 
