@@ -435,8 +435,18 @@ input.mono {
 }
 .grid2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
+}
+.grid2 > * {
+  min-width: 0;
+}
+/* Les champs date/heure natifs ont une largeur intrinsèque qui déborde d'une demi-colonne mobile */
+input[type='datetime-local'],
+input[type='date'],
+input[type='time'] {
+  min-width: 0;
+  max-width: 100%;
 }
 .check {
   display: flex;

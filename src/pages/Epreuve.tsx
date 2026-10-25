@@ -6,7 +6,7 @@ import { db } from '../lib/db'
 import { useAthletes, useCourse, useCourses, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
 import { alive, create, softDelete, update } from '../lib/repo'
 import { fmtDate, fmtLongueur, fmtMs, fromLocalInput, longueurPiste, nbToursAttendus, retenu, toLocalInput } from '../lib/time'
-import { LIBELLES, mancheLabel, type TypeManche } from '../lib/types'
+import { LIBELLES, mancheLabel, type Course, type TypeManche } from '../lib/types'
 import { ChronoFiche, NumInput, Pliable } from '../components/ChronoFiche'
 
 /* ------------------------------ Épreuve ------------------------------ */
@@ -251,6 +251,10 @@ export function CoursePage() {
   const resumeManche = [course.numero_course ? `#${course.numero_course}` : '', quand ?? '', course.regle_qualification ?? ''].filter(Boolean).join(' · ')
   const sansResultat = !participations || participations.length === 0
 
+  const details = (
+    <DetailsManche course={course} longuePiste={piste?.type_piste === 'longue_piste'} patineursEditable={sansResultat} />
+  )
+
   return (
     <Page title={titre} back={retour ? true : `/epreuves/${course.epreuve_id}`}>
       <div className="card">
@@ -258,9 +262,11 @@ export function CoursePage() {
         <small>{[piste?.nom, epreuve?.nom, quand].filter(Boolean).join(' · ')}</small>
       </div>
 
-      {/* Une fiche complète par athlète : résultat, tours, détail du temps, vidéo… */}
+      {/* Une fiche complète par athlète : tours, détail du temps, résultat, ressenti/vidéo…
+          Avec un seul athlète, les détails de la manche sont intégrés au dernier bloc de sa fiche ;
+          sinon ils restent dans une section à part, puisqu'ils sont communs à tous. */}
       {participations?.map((p) => (
-        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} />
+        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} complement={participations.length === 1 ? details : undefined} />
       ))}
       {sansResultat && candidats.length === 0 && <Empty>Aucun temps enregistré pour cette manche.</Empty>}
 
@@ -277,53 +283,63 @@ export function CoursePage() {
         </div>
       )}
 
-      <Pliable key={course.id} titre="Détails de la manche" resume={resumeManche || undefined}>
-        <div className="grid2">
-          <Field label="Numéro officiel">
-            <input defaultValue={course.numero_course ?? ''} onBlur={(e) => update('course', course.id, { numero_course: e.target.value || null })} />
-          </Field>
-          {sansResultat ? (
-            <Field label="Patineurs au départ">
-              <NumInput value={course.nb_patineurs} onChange={(v) => update('course', course.id, { nb_patineurs: v })} />
-            </Field>
-          ) : (
-            <Field label="Patineurs au départ" hint="Se modifie dans le résultat ci-dessus">
-              <input className="mono" value={course.nb_patineurs ?? '—'} readOnly />
-            </Field>
-          )}
-        </div>
-        <div className="grid2">
-          <Field label="Heure prévue">
-            <input type="datetime-local" defaultValue={toLocalInput(course.prevue_a)} onBlur={(e) => update('course', course.id, { prevue_a: fromLocalInput(e.target.value) })} />
-          </Field>
-          <Field label="Heure réelle" hint="Renseignée par le premier chrono">
-            <input type="datetime-local" defaultValue={toLocalInput(course.debutee_a)} onBlur={(e) => update('course', course.id, { debutee_a: fromLocalInput(e.target.value) })} />
-          </Field>
-        </div>
-        <Field label="Règle de qualification">
-          <input defaultValue={course.regle_qualification ?? ''} onBlur={(e) => update('course', course.id, { regle_qualification: e.target.value || null })} placeholder="ex. 2 premières + meilleur 3e temps" />
-        </Field>
-        {piste?.type_piste === 'longue_piste' && (
-          <div className="grid2">
-            <Field label="Température (°C)">
-              <NumInput value={course.temperature_c} onChange={(v) => update('course', course.id, { temperature_c: v })} decimal />
-            </Field>
-            <Field label="Vent">
-              <input defaultValue={course.vent ?? ''} onBlur={(e) => update('course', course.id, { vent: e.target.value || null })} />
-            </Field>
-          </div>
-        )}
-        <Field label="État de la glace">
-          <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
-        </Field>
-        <Field label="Commentaire sur la manche">
-          <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />
-        </Field>
-      </Pliable>
+      {participations?.length !== 1 && (
+        <Pliable key={course.id} titre="Détails de la manche" resume={resumeManche || undefined}>
+          {details}
+        </Pliable>
+      )}
 
       <button className="btn-danger btn-block" onClick={supprimer}>
         Supprimer la manche
       </button>
     </Page>
+  )
+}
+
+/** Champs propres à la manche (communs à tous les patineurs). Le nombre de patineurs au départ se saisit dans le Résultat dès qu'une fiche existe. */
+function DetailsManche({ course, longuePiste, patineursEditable }: { course: Course; longuePiste: boolean; patineursEditable: boolean }) {
+  return (
+    <>
+      <div className="grid2">
+        <Field label="Numéro officiel">
+          <input defaultValue={course.numero_course ?? ''} onBlur={(e) => update('course', course.id, { numero_course: e.target.value || null })} />
+        </Field>
+        {patineursEditable ? (
+          <Field label="Patineurs au départ">
+            <NumInput value={course.nb_patineurs} onChange={(v) => update('course', course.id, { nb_patineurs: v })} />
+          </Field>
+        ) : (
+          <Field label="Patineurs au départ" hint="Se modifie dans le résultat">
+            <input className="mono" value={course.nb_patineurs ?? '—'} readOnly />
+          </Field>
+        )}
+      </div>
+      {/* Pleine largeur : un champ date + heure natif ne tient pas dans une demi-colonne sur mobile */}
+      <Field label="Heure prévue">
+        <input type="datetime-local" defaultValue={toLocalInput(course.prevue_a)} onBlur={(e) => update('course', course.id, { prevue_a: fromLocalInput(e.target.value) })} />
+      </Field>
+      <Field label="Heure réelle" hint="Renseignée par le premier chrono">
+        <input type="datetime-local" defaultValue={toLocalInput(course.debutee_a)} onBlur={(e) => update('course', course.id, { debutee_a: fromLocalInput(e.target.value) })} />
+      </Field>
+      <Field label="Règle de qualification">
+        <input defaultValue={course.regle_qualification ?? ''} onBlur={(e) => update('course', course.id, { regle_qualification: e.target.value || null })} placeholder="ex. 2 premières + meilleur 3e temps" />
+      </Field>
+      {longuePiste && (
+        <div className="grid2">
+          <Field label="Température (°C)">
+            <NumInput value={course.temperature_c} onChange={(v) => update('course', course.id, { temperature_c: v })} decimal />
+          </Field>
+          <Field label="Vent">
+            <input defaultValue={course.vent ?? ''} onBlur={(e) => update('course', course.id, { vent: e.target.value || null })} />
+          </Field>
+        </div>
+      )}
+      <Field label="État de la glace">
+        <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
+      </Field>
+      <Field label="Commentaire sur la manche">
+        <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />
+      </Field>
+    </>
   )
 }
