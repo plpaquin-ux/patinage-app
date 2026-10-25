@@ -98,6 +98,39 @@ export function ChronoFiche({
     })
     await recalc()
   }
+  /** Contenu d'un tour (temps, capture, notes) : ce qu'on déplace quand on réordonne. Les numéros restent fixes
+   *  par ligne, pour ne jamais envoyer au serveur deux tours portant le même numéro (index unique). */
+  const CONTENU = ['temps_tour_ms', 'temps_tour_capture_ms', 'cumul_capture_ms', 'capture_a', 'position_peloton', 'commentaire'] as const
+  function contenu(t: Tour): Pick<Tour, (typeof CONTENU)[number]> {
+    return Object.fromEntries(CONTENU.map((k) => [k, t[k]])) as Pick<Tour, (typeof CONTENU)[number]>
+  }
+  /** Échange le tour avec son voisin (dir = -1 : vers le haut, +1 : vers le bas). */
+  async function deplacerTour(t: Tour, dir: -1 | 1) {
+    const idx = trs.findIndex((x) => x.id === t.id)
+    const autre = trs[idx + dir]
+    if (!autre) return
+    await update('tour', t.id, contenu(autre))
+    await update('tour', autre.id, contenu(t))
+    setSaved(true)
+  }
+  /** Insère un tour vide juste après t : un tour est créé en fin de liste, puis les contenus glissent d'un cran. */
+  async function insererTourApres(t: Tour) {
+    const idx = trs.findIndex((x) => x.id === t.id)
+    const dernier = await create('tour', {
+      chrono_id: ch.id,
+      numero_tour: (trs.at(-1)?.numero_tour ?? 0) + 1,
+      temps_tour_ms: 0,
+      temps_tour_capture_ms: null,
+      cumul_capture_ms: null,
+      capture_a: null,
+      position_peloton: null,
+      commentaire: null,
+    })
+    const liste = [...trs, dernier]
+    for (let j = liste.length - 1; j > idx + 1; j--) await update('tour', liste[j].id, contenu(liste[j - 1]))
+    await update('tour', liste[idx + 1].id, { temps_tour_ms: 0, temps_tour_capture_ms: null, cumul_capture_ms: null, capture_a: null, position_peloton: null, commentaire: null })
+    await recalc()
+  }
   async function renumeroter(rest: Tour[]) {
     for (let i = 0; i < rest.length; i++) {
       if (rest[i].numero_tour !== i + 1) await update('tour', rest[i].id, { numero_tour: i + 1 })
@@ -203,7 +236,15 @@ export function ChronoFiche({
           const delta = t.temps_tour_capture_ms != null ? t.temps_tour_ms - t.temps_tour_capture_ms : null
           return (
             <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr auto 36px', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-              <span className="mono muted">T{t.numero_tour}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                <button className="btn-ghost btn-sm tour-move" onClick={() => deplacerTour(t, -1)} disabled={i === 0} aria-label={`Monter T${t.numero_tour}`}>
+                  ▲
+                </button>
+                <span className="mono muted">T{t.numero_tour}</span>
+                <button className="btn-ghost btn-sm tour-move" onClick={() => deplacerTour(t, 1)} disabled={i === trs.length - 1} aria-label={`Descendre T${t.numero_tour}`}>
+                  ▼
+                </button>
+              </div>
               <div>
                 <TimeInput value={t.temps_tour_ms} allowEmpty={false} onChange={(ms) => ms != null && patchTour(t, ms)} className={t.temps_tour_ms === best ? 'best' : ''} />
                 {delta != null && delta !== 0 && (
@@ -211,11 +252,16 @@ export function ChronoFiche({
                     capté {fmtMs(t.temps_tour_capture_ms)} ({fmtDelta(delta)})
                   </small>
                 )}
-                {i > 0 && (
-                  <button className="btn-ghost btn-sm" style={{ minHeight: 28, padding: '0 6px', fontSize: '0.78rem' }} onClick={() => fusionnerAvecPrecedent(t)}>
-                    ⤴ fusionner avec T{t.numero_tour - 1}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0 4px' }}>
+                  {i > 0 && (
+                    <button className="btn-ghost btn-sm" style={{ minHeight: 28, padding: '0 6px', fontSize: '0.78rem' }} onClick={() => fusionnerAvecPrecedent(t)}>
+                      ⤴ fusionner avec T{t.numero_tour - 1}
+                    </button>
+                  )}
+                  <button className="btn-ghost btn-sm" style={{ minHeight: 28, padding: '0 6px', fontSize: '0.78rem' }} onClick={() => insererTourApres(t)}>
+                    + tour après T{t.numero_tour}
                   </button>
-                )}
+                </div>
               </div>
               <span className="mono muted" style={{ fontSize: '0.85rem' }}>
                 {fmtMs(cumul)}

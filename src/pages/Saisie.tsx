@@ -354,7 +354,7 @@ export default function SaisiePage() {
             </Field>
           </div>
           <Field label="Commentaire">
-            <input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} placeholder="ex. chute au 3e tour, repêchée" />
+            <textarea value={commentaire} onChange={(e) => setCommentaire(e.target.value)} placeholder="ex. chute au 3e tour, repêchée" />
           </Field>
           <Field label="Vidéo (lien YouTube)" hint="Visible dans la page partagée avec la famille">
             <input type="url" inputMode="url" value={urlVideo} onChange={(e) => setUrlVideo(e.target.value)} placeholder="https://youtu.be/…" />

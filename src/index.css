@@ -272,6 +272,17 @@ small,
   margin: 0;
 }
 
+/* ---- Tours : flèches de réordonnancement ---- */
+.tour-move {
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+  color: var(--fg-3);
+}
+.tour-move:disabled {
+  opacity: 0.2;
+}
+
 /* ---- Sections repliables ---- */
 details.pliable {
   background: var(--bg-2);
