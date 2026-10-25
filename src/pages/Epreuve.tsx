@@ -7,7 +7,7 @@ import { useAthletes, useCourse, useCourses, useEpreuve, useInscriptions, usePar
 import { alive, create, softDelete, update } from '../lib/repo'
 import { fmtDate, fmtLongueur, fmtMs, fromLocalInput, longueurPiste, nbToursAttendus, retenu, toLocalInput } from '../lib/time'
 import { LIBELLES, mancheLabel, type TypeManche } from '../lib/types'
-import { NumInput } from './ChronoEdit'
+import { ChronoFiche, NumInput, Pliable } from '../components/ChronoFiche'
 
 /* ------------------------------ Épreuve ------------------------------ */
 export function EpreuvePage() {
@@ -163,7 +163,12 @@ function CourseForm({ epreuveId, ordre, onDone }: { epreuveId: string; ordre: nu
   )
 }
 
-/* ------------------------------ Course ------------------------------ */
+/* ------------------------------ Course (manche) ------------------------------ */
+/**
+ * Page unique d'une manche : la fiche complète de chaque athlète (résultat, tours, vidéo…)
+ * est intégrée ici ; les détails propres à la manche (numéro officiel, heures, règle de
+ * qualification, glace) sont repliés en bas, puisqu'on les remplit rarement en direct.
+ */
 export function CoursePage() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -176,10 +181,6 @@ export function CoursePage() {
   const participations = useParticipations(id)
   const inscriptions = useInscriptions(epreuve?.competition_id)
   const athletes = useAthletes()
-  const chronos = useLiveQuery(
-    async () => (participations ? Promise.all(participations.map((p) => db.chrono.get(p.chrono_id))) : []),
-    [participations],
-  )
 
   if (course === undefined) return <Page title="Course" back>…</Page>
   if (!course) {
@@ -194,7 +195,9 @@ export function CoursePage() {
     (a) => (inscriptions?.some((i) => i.athlete_id === a.id) ?? true) && !participations?.some((p) => p.athlete_id === a.id),
   )
 
+  /** Crée un chrono vide (saisie manuelle) et sa participation ; la fiche apparaît aussitôt dans la page. */
   async function saisieManuelle(athleteId: string) {
+    const longueur = longueurPiste(competition, circuit, piste)
     const ch = await create('chrono', {
       athlete_id: athleteId,
       contexte: 'competition',
@@ -204,8 +207,8 @@ export function CoursePage() {
       source: 'saisie_manuelle',
       debute_a: course!.debutee_a ?? course!.prevue_a ?? null,
       termine_a: null,
-      nb_tours_prevus: nbToursAttendus(distance?.metres, longueurPiste(competition, circuit, piste), distance?.nb_tours_defaut),
-      longueur_piste_m: longueurPiste(competition, circuit, piste),
+      nb_tours_prevus: nbToursAttendus(distance?.metres, longueur, distance?.nb_tours_defaut),
+      longueur_piste_m: longueur,
       nb_tours_enregistres: 0,
       temps_calcule_ms: null,
       temps_ajuste_ms: null,
@@ -233,7 +236,6 @@ export function CoursePage() {
       url_video: null,
       commentaire: null,
     })
-    nav(`/chrono/${ch.id}`)
   }
 
   async function supprimer() {
@@ -243,45 +245,25 @@ export function CoursePage() {
   }
 
   const titre = `${distance?.libelle ?? ''} · ${mancheLabel(course)}`
+  const quand = course.debutee_a ? fmtDate(course.debutee_a, true) : course.prevue_a ? `prévue ${fmtDate(course.prevue_a, true)}` : null
+  const resumeManche = [course.numero_course ? `#${course.numero_course}` : '', quand ?? '', course.regle_qualification ?? ''].filter(Boolean).join(' · ')
+  const sansResultat = !participations || participations.length === 0
+
   return (
     <Page title={titre} back={`/epreuves/${course.epreuve_id}`}>
       <div className="card">
         <div style={{ fontWeight: 700 }}>{competition?.nom}</div>
-        <small>{[piste?.nom, epreuve?.nom].filter(Boolean).join(' · ')}</small>
+        <small>{[piste?.nom, epreuve?.nom, quand].filter(Boolean).join(' · ')}</small>
       </div>
 
-      <div className="section-head">
-        <h3>Résultats</h3>
-      </div>
-      {participations && participations.length === 0 && <Empty>Aucun temps enregistré pour cette manche.</Empty>}
-      <ul className="list">
-        {participations?.map((p, i) => {
-          const a = athletes?.find((x) => x.id === p.athlete_id)
-          const ch = chronos?.[i]
-          return (
-            <li key={p.id}>
-              <Link className="row" to={`/chrono/${p.chrono_id}`}>
-                <div className="grow">
-                  <div className="title">
-                    {a?.prenom} {a?.nom}
-                  </div>
-                  <div className="sub">
-                    {p.rang_officiel ? `${p.rang_officiel}ᵉ` : p.position_arrivee ? `${p.position_arrivee}ᵉ à l'arrivée` : 'rang non saisi'}
-                    {p.points != null ? ` · ${p.points} pts` : ''}
-                    {ch?.temps_officiel_ms != null ? ' · officiel' : ch?.chrono_incomplet ? ' · incomplet' : ''}
-                  </div>
-                </div>
-                {p.statut !== 'termine' && <span className="badge warn">{LIBELLES.statut[p.statut]}</span>}
-                <span className="time">{fmtMs(ch ? retenu(ch) : null)}</span>
-                <span className="chev">›</span>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
+      {/* Une fiche complète par athlète : résultat, tours, détail du temps, vidéo… */}
+      {participations?.map((p) => (
+        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} />
+      ))}
+      {sansResultat && candidats.length === 0 && <Empty>Aucun temps enregistré pour cette manche.</Empty>}
 
       {candidats.length > 0 && (
-        <div className="card" style={{ marginTop: 12 }}>
+        <div className="card">
           {candidats.map((a) => (
             <div key={a.id} className="actions" style={{ marginTop: 0, marginBottom: 8 }}>
               <Link className="btn btn-primary" to={`/chrono?course=${course.id}&athlete=${a.id}`}>
@@ -293,21 +275,26 @@ export function CoursePage() {
         </div>
       )}
 
-      <h3 style={{ marginTop: 18 }}>Détails de la manche</h3>
-      <div className="card">
+      <Pliable key={course.id} titre="Détails de la manche" resume={resumeManche || undefined}>
         <div className="grid2">
           <Field label="Numéro officiel">
             <input defaultValue={course.numero_course ?? ''} onBlur={(e) => update('course', course.id, { numero_course: e.target.value || null })} />
           </Field>
-          <Field label="Patineurs au départ">
-            <NumInput value={course.nb_patineurs} onChange={(v) => update('course', course.id, { nb_patineurs: v })} />
-          </Field>
+          {sansResultat ? (
+            <Field label="Patineurs au départ">
+              <NumInput value={course.nb_patineurs} onChange={(v) => update('course', course.id, { nb_patineurs: v })} />
+            </Field>
+          ) : (
+            <Field label="Patineurs au départ" hint="Se modifie dans le résultat ci-dessus">
+              <input className="mono" value={course.nb_patineurs ?? '—'} readOnly />
+            </Field>
+          )}
         </div>
         <div className="grid2">
           <Field label="Heure prévue">
             <input type="datetime-local" defaultValue={toLocalInput(course.prevue_a)} onBlur={(e) => update('course', course.id, { prevue_a: fromLocalInput(e.target.value) })} />
           </Field>
-          <Field label="Heure réelle">
+          <Field label="Heure réelle" hint="Renseignée par le premier chrono">
             <input type="datetime-local" defaultValue={toLocalInput(course.debutee_a)} onBlur={(e) => update('course', course.id, { debutee_a: fromLocalInput(e.target.value) })} />
           </Field>
         </div>
@@ -327,13 +314,11 @@ export function CoursePage() {
         <Field label="État de la glace">
           <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
         </Field>
-        <Field label="Vidéo de la manche (lien YouTube)" hint="Utilisée si l'athlète n'a pas de vidéo propre">
-          <input type="url" inputMode="url" defaultValue={course.url_video ?? ''} onBlur={(e) => update('course', course.id, { url_video: e.target.value || null })} placeholder="https://youtu.be/…" />
-        </Field>
-        <Field label="Commentaire">
+        <Field label="Commentaire sur la manche">
           <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />
         </Field>
-      </div>
+      </Pliable>
+
       <button className="btn-danger btn-block" onClick={supprimer}>
         Supprimer la manche
       </button>

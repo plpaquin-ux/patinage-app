@@ -272,6 +272,60 @@ small,
   margin: 0;
 }
 
+/* ---- Sections repliables ---- */
+details.pliable {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+details.pliable > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 16px;
+  font-weight: 700;
+  user-select: none;
+}
+details.pliable > summary::-webkit-details-marker {
+  display: none;
+}
+details.pliable > summary .sub {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--fg-3);
+}
+details.pliable[open] > summary .sub {
+  display: none;
+}
+details.pliable > summary::after {
+  content: '›';
+  color: var(--fg-3);
+  font-size: 1.3rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+  margin-left: auto;
+}
+details.pliable > summary:has(.sub)::after {
+  margin-left: 0;
+}
+details.pliable[open] > summary::after {
+  transform: rotate(-90deg);
+}
+details.pliable > .inner {
+  padding: 0 16px 14px;
+}
+
 /* ---- Boutons ---- */
 button,
 .btn {

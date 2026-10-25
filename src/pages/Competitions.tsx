@@ -19,7 +19,7 @@ import {
 import { alive, create, softDelete, update } from '../lib/repo'
 import { fmtDate, fmtLongueur, fmtMs, nbToursAttendus, retenu, todayIsoDate } from '../lib/time'
 import { LIBELLES, mancheLabel, type Competition, type TypeCourse } from '../lib/types'
-import { NumInput } from './ChronoEdit'
+import { NumInput } from '../components/ChronoFiche'
 
 /* ------------------------------ Liste ------------------------------ */
 export function CompetitionsPage() {

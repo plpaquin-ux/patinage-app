@@ -87,7 +87,8 @@ export default function ChronoPage() {
         if (course && !course.debutee_a) await update('course', course.id, { debutee_a: chrono.debute_a })
       }
       sw.reset()
-      nav(`/chrono/${chrono.id}`, { replace: true })
+      // En compétition, on retombe sur la page de la manche (fiche intégrée) ; en entraînement, sur la fiche du chrono.
+      nav(ctx.courseId ? `/courses/${ctx.courseId}` : `/chrono/${chrono.id}`, { replace: true })
     } finally {
       setSaving(false)
     }
