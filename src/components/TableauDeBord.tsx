@@ -262,11 +262,12 @@ function CompetitionsTab({ data, onVideo, liens }: { data: Portrait; onVideo: (v
         const enCours = comp.date_debut <= today && fin >= today
         const aVenir = comp.date_debut > today
         const courses = comp.courses ?? []
-        // Regroupement par épreuve (distance), dans l'ordre du programme
+        // Regroupement par épreuve (distance nominale), dans l'ordre du programme ;
+        // une course peut se courir sur une autre distance (qualif 1000 m du 1500 m) : on l'indique sur sa ligne.
         const epreuves: { id: string; distance: string; type_course: TypeCourse; courses: PCourse[] }[] = []
         for (const c of courses) {
           let e = epreuves.find((x) => x.id === c.epreuve_id)
-          if (!e) epreuves.push((e = { id: c.epreuve_id, distance: c.distance, type_course: c.type_course, courses: [] }))
+          if (!e) epreuves.push((e = { id: c.epreuve_id, distance: c.epreuve_distance ?? c.distance, type_course: c.type_course, courses: [] }))
           e.courses.push(c)
         }
         const nbVideos = courses.filter((c) => c.url_video).length
@@ -324,6 +325,7 @@ function CompetitionsTab({ data, onVideo, liens }: { data: Portrait; onVideo: (v
                           <button className={`course-row${aDetail ? ' has-detail' : ''}`} onClick={() => aDetail && setDetail(ouvert ? null : c.participation_id)} aria-expanded={aDetail ? ouvert : undefined}>
                             <span className="course-manche">
                               {mancheLabel(c)}
+                              {c.epreuve_distance && c.distance !== c.epreuve_distance ? <small> {c.distance}</small> : null}
                               <BadgeStatut statut={c.statut} />
                             </span>
                             <span className="course-rang">

@@ -21,7 +21,7 @@ import { NumInput } from '../components/ChronoFiche'
 
 /**
  * Saisie rapide d'un résultat passé (sans chrono) : crée au besoin la compétition,
- * l'épreuve et la manche, puis un chrono « saisie manuelle » avec le temps final et le résultat.
+ * l'épreuve et la course, puis un chrono « saisie manuelle » avec le temps final et le résultat.
  */
 export default function SaisiePage() {
   const [params] = useSearchParams()
@@ -40,6 +40,8 @@ export default function SaisiePage() {
   // Résultat
   const [distanceId, setDistanceId] = useState('')
   const [typeManche, setTypeManche] = useState<TypeManche>('finale')
+  // Épreuve à laquelle rattacher la course quand sa distance diffère ('' = même distance) : qualif 1000 m du 1500 m
+  const [epreuveDistanceId, setEpreuveDistanceId] = useState('')
   const [lettre, setLettre] = useState('A')
   const [temps, setTemps] = useState<number | null>(null)
   const [rang, setRang] = useState<number | null>(null)
@@ -115,27 +117,29 @@ export default function SaisiePage() {
       } else if ((rangFinal != null && ins.rang_final == null) || (nbParticipants != null && ins.nb_participants == null)) {
         await update('inscription_competition', ins.id, { rang_final: ins.rang_final ?? rangFinal, nb_participants: ins.nb_participants ?? nbParticipants })
       }
-      // 3. Épreuve (réutilisée si la même distance existe déjà dans la compétition)
+      // 3. Épreuve (réutilisée si une épreuve de cette distance nominale existe déjà dans la compétition)
+      const distanceEpreuve = distances?.find((d) => d.id === epreuveDistanceId) ?? distance
       const epreuves = alive(await db.epreuve.where('competition_id').equals(compId).toArray())
-      let epreuve = epreuves.find((x) => x.distance_id === distance.id)
+      let epreuve = epreuves.find((x) => x.distance_id === distanceEpreuve.id)
       if (!epreuve) {
         epreuve = await create('epreuve', {
           competition_id: compId,
           groupe_id: null,
-          distance_id: distance.id,
-          type_course: distance.type_course,
+          distance_id: distanceEpreuve.id,
+          type_course: distanceEpreuve.type_course,
           nom: null,
           ordre: epreuves.length + 1,
           commentaire: null,
         })
       }
-      // 4. Manche (réutilisée si même type + lettre)
+      // 4. Course (réutilisée si même type + lettre + distance)
       const courses = alive(await db.course.where('epreuve_id').equals(epreuve.id).toArray())
       const lettreFinale = typeManche === 'finale' ? lettre.trim().toUpperCase() || null : null
-      let course = courses.find((x) => x.type_manche === typeManche && (x.lettre_finale ?? null) === lettreFinale)
+      let course = courses.find((x) => x.type_manche === typeManche && (x.lettre_finale ?? null) === lettreFinale && x.distance_id === distance.id)
       if (!course) {
         course = await create('course', {
           epreuve_id: epreuve.id,
+          distance_id: distance.id,
           type_manche: typeManche,
           lettre_finale: lettreFinale,
           ordre_manche: courses.length + 1,
@@ -153,10 +157,10 @@ export default function SaisiePage() {
       } else if (nbPatineurs != null && course.nb_patineurs == null) {
         await update('course', course.id, { nb_patineurs: nbPatineurs })
       }
-      // 5. Déjà un résultat pour cet athlète dans cette manche ?
+      // 5. Déjà un résultat pour cet athlète dans cette course ?
       const parts = alive(await db.participation.where('course_id').equals(course.id).toArray())
       if (parts.some((p) => p.athlete_id === athleteId)) {
-        setErreur(`Un résultat existe déjà pour cette manche (${mancheLabel(course)}). Ouvre-le depuis la compétition pour le modifier.`)
+        setErreur(`Un résultat existe déjà pour cette course (${mancheLabel(course)}). Ouvre-le depuis la compétition pour le modifier.`)
         return
       }
       // 6. Chrono (temps final seulement) + participation
@@ -297,7 +301,7 @@ export default function SaisiePage() {
                 ))}
               </select>
             </Field>
-            <Field label="Manche">
+            <Field label="Course">
               <select value={typeManche} onChange={(e) => setTypeManche(e.target.value as TypeManche)}>
                 {(Object.keys(LIBELLES.type_manche) as TypeManche[]).map((t) => (
                   <option key={t} value={t}>
@@ -310,6 +314,20 @@ export default function SaisiePage() {
           {typeManche === 'finale' && (
             <Field label="Finale (A, B, C…)">
               <input value={lettre} onChange={(e) => setLettre(e.target.value)} maxLength={2} />
+            </Field>
+          )}
+          {typeManche !== 'finale' && typeManche !== 'serie_unique' && (
+            <Field label="Épreuve" hint="Si la qualification se court sur une autre distance que la finale (ex. qualif 1000 m du 1500 m).">
+              <select value={epreuveDistanceId} onChange={(e) => setEpreuveDistanceId(e.target.value)}>
+                <option value="">Épreuve de la même distance</option>
+                {distancesProposees
+                  .filter((d) => d.id !== distanceId)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      Épreuve {d.libelle}
+                    </option>
+                  ))}
+              </select>
             </Field>
           )}
           <div className="grid2">

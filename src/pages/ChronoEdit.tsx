@@ -7,7 +7,7 @@ import { useChrono } from '../lib/hooks'
 
 /**
  * Page /chrono/:id : fiche d'un chrono d'entraînement. Un chrono de compétition n'a qu'un seul
- * écran, la page de sa manche (/courses/:id) : les liens profonds (accueil, historique,
+ * écran, la page de sa course (/courses/:id) : les liens profonds (accueil, historique,
  * tableau de bord, saisie rapide) y sont redirigés, avec un retour vers la page d'origine.
  */
 export default function ChronoEditPage() {

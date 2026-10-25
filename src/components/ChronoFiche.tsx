@@ -11,7 +11,7 @@ import { TimeInput } from './TimeInput'
 /**
  * Fiche complète d'un chrono : en-tête (athlète, temps retenu), résultat de course, tours,
  * détail du temps, ressenti / vidéo / commentaire. Sans `<Page>` : s'insère dans la page de
- * manche (une fiche par athlète) ou dans la page /chrono/:id (entraînement, liens profonds).
+ * course (une fiche par athlète) ou dans la page /chrono/:id (entraînement, liens profonds).
  *
  * Sections ordonnées selon l'usage en aréna : ce qu'on remplit en direct est en haut, les
  * champs rarement touchés sont repliés.
@@ -23,9 +23,9 @@ export function ChronoFiche({
   onDeleted,
 }: {
   chronoId: string
-  /** Afficher la compétition / séance et la piste dans l'en-tête (inutile dans la page de manche, qui les montre déjà). */
+  /** Afficher la compétition / séance et la piste dans l'en-tête (inutile dans la page de course, qui les montre déjà). */
   contexte?: boolean
-  /** Champs supplémentaires (p. ex. les détails de la manche) ajoutés au bas du dernier bloc. */
+  /** Champs supplémentaires (p. ex. les détails de la course) ajoutés au bas du dernier bloc. */
   complement?: ReactNode
   onDeleted?: () => void
 }) {
@@ -346,12 +346,12 @@ export function ChronoFiche({
             )}
             <label className="check">
               <input type="checkbox" checked={participation.qualifie_suivant ?? false} onChange={(e) => patchParticipation({ qualifie_suivant: e.target.checked })} />
-              Qualifiée pour la manche suivante
+              Qualifiée pour la course suivante (finale)
             </label>
           </div>
 
-          {/* ---- Ressenti, vidéo, commentaire — et les détails de la manche quand la page les confie à la fiche ---- */}
-          <h3 style={{ marginTop: 18 }}>{complement ? 'Ressenti, vidéo et détails de la manche' : 'Ressenti, vidéo et commentaire'}</h3>
+          {/* ---- Ressenti, vidéo, commentaire — et les détails de la course quand la page les confie à la fiche ---- */}
+          <h3 style={{ marginTop: 18 }}>{complement ? 'Ressenti, vidéo et détails de la course' : 'Ressenti, vidéo et commentaire'}</h3>
           <div className="card">
             <Field label="Ressenti (1–5)">
               <Ressenti value={participation.ressenti} onChange={(v) => patchParticipation({ ressenti: v })} />
@@ -364,7 +364,7 @@ export function ChronoFiche({
             </Field>
             {complement && (
               <div style={{ borderTop: '1px solid var(--line)', marginTop: 14, paddingTop: 12 }}>
-                <h3 style={{ marginBottom: 10 }}>Détails de la manche</h3>
+                <h3 style={{ marginBottom: 10 }}>Détails de la course</h3>
                 {complement}
               </div>
             )}

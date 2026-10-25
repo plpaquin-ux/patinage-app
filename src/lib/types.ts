@@ -138,6 +138,7 @@ export interface InscriptionCompetition extends BaseRow {
 export interface Epreuve extends BaseRow {
   competition_id: string
   groupe_id: string | null
+  /** Distance nominale (celle de la finale) : nom de l'épreuve, tri, valeur par défaut des courses. */
   distance_id: string
   type_course: TypeCourse
   nom: string | null
@@ -147,6 +148,8 @@ export interface Epreuve extends BaseRow {
 
 export interface Course extends BaseRow {
   epreuve_id: string
+  /** Distance réellement courue — peut différer de la distance nominale de l'épreuve (qualification de 1000 m d'un 1500 m). */
+  distance_id: string
   type_manche: TypeManche
   lettre_finale: string | null
   ordre_manche: number | null

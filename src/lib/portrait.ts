@@ -11,6 +11,9 @@ import type { StatutResultat, TypeCourse, TypeManche, TypePiste } from './types'
 export interface PCourse {
   epreuve_id: string
   epreuve_ordre: number | null
+  /** Distance nominale de l'épreuve (titre du regroupement) ; `distance` est celle réellement courue. */
+  epreuve_distance: string
+  epreuve_metres: number
   course_id: string
   type_manche: TypeManche
   lettre_finale: string | null
@@ -105,12 +108,15 @@ export async function portraitLocal(athleteId: string): Promise<Portrait | null>
     if (!course || course.deleted_at) continue
     const epreuve = await db.epreuve.get(course.epreuve_id)
     if (!epreuve || epreuve.deleted_at) continue
-    const distance = distances.find((d) => d.id === epreuve.distance_id)
-    if (!distance) continue
+    const distance = distances.find((d) => d.id === course.distance_id)
+    const distanceEpreuve = distances.find((d) => d.id === epreuve.distance_id) ?? distance
+    if (!distance || !distanceEpreuve) continue
     const tours = alive(await db.tour.where('chrono_id').equals(chrono.id).toArray()).sort((a, b) => a.numero_tour - b.numero_tour)
     const ligne: PCourse = {
       epreuve_id: epreuve.id,
       epreuve_ordre: epreuve.ordre,
+      epreuve_distance: distanceEpreuve.libelle,
+      epreuve_metres: distanceEpreuve.metres,
       course_id: course.id,
       type_manche: course.type_manche,
       lettre_finale: course.lettre_finale,
@@ -152,7 +158,7 @@ export async function portraitLocal(athleteId: string): Promise<Portrait | null>
     const saison = cp.saison_id ? saisons.find((s) => s.id === cp.saison_id) : undefined
     const insc = inscriptions.find((i) => i.competition_id === id)
     const courses = (parComp.get(id) ?? []).sort(
-      (a, b) => cmp(a.course_a, b.course_a) || cmp(a.epreuve_ordre, b.epreuve_ordre) || a.metres - b.metres || cmp(a.ordre_manche, b.ordre_manche),
+      (a, b) => cmp(a.course_a, b.course_a) || cmp(a.epreuve_ordre, b.epreuve_ordre) || a.epreuve_metres - b.epreuve_metres || cmp(a.ordre_manche, b.ordre_manche),
     )
     competitions.push({
       id: cp.id,
