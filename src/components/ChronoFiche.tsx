@@ -20,6 +20,7 @@ export function ChronoFiche({
   chronoId,
   contexte = true,
   complement,
+  supprimable = true,
   onDeleted,
 }: {
   chronoId: string
@@ -27,6 +28,8 @@ export function ChronoFiche({
   contexte?: boolean
   /** Champs supplémentaires (p. ex. les détails de la course) ajoutés au bas du dernier bloc. */
   complement?: ReactNode
+  /** Afficher le bouton de suppression (inutile dans la page de course avec un seul athlète : la course se supprime d'un bloc). */
+  supprimable?: boolean
   onDeleted?: () => void
 }) {
   const chrono = useChrono(chronoId)
@@ -359,7 +362,7 @@ export function ChronoFiche({
             <Field label="Vidéo (lien YouTube)" hint="Lisible dans la page partagée avec la famille">
               <input type="url" inputMode="url" defaultValue={participation.url_video ?? ''} onBlur={(e) => patchParticipation({ url_video: e.target.value || null })} placeholder="https://youtu.be/…" />
             </Field>
-            <Field label="Commentaire sur la course">
+            <Field label={`Commentaire sur la course${athlete ? ` de ${athlete.prenom}` : ''}`}>
               <textarea defaultValue={participation.commentaire ?? ''} onBlur={(e) => patchParticipation({ commentaire: e.target.value || null })} />
             </Field>
             {complement && (
@@ -380,9 +383,11 @@ export function ChronoFiche({
       )}
 
 
-      <button className="btn-ghost btn-block" onClick={supprimerChrono} style={{ color: 'var(--danger)', marginBottom: 12 }}>
-        {participation ? `Supprimer le résultat${athlete ? ` de ${athlete.prenom}` : ''}` : 'Supprimer le chrono'}
-      </button>
+      {supprimable && (
+        <button className="btn-ghost btn-block" onClick={supprimerChrono} style={{ color: 'var(--danger)', marginBottom: 12 }}>
+          {participation ? `Supprimer le résultat${athlete ? ` de ${athlete.prenom}` : ''}` : 'Supprimer le chrono'}
+        </button>
+      )}
     </>
   )
 }

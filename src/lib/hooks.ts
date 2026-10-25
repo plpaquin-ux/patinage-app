@@ -18,6 +18,17 @@ export function useDistances(typePiste?: TypePiste | null) {
     [typePiste],
   )
 }
+/** Toutes les distances non supprimées, actives ou non : pour retrouver le libellé d'une épreuve ou d'une course existante.
+ *  (`useDistances` ne retourne que les actives : c'est ce qu'on propose dans les sélecteurs.) */
+export function useDistancesToutes(typePiste?: TypePiste | null) {
+  return useLiveQuery(
+    async () =>
+      alive(await db.distance.toArray())
+        .filter((d) => !typePiste || d.type_piste === typePiste)
+        .sort((a, b) => a.type_piste.localeCompare(b.type_piste) || a.metres - b.metres),
+    [typePiste],
+  )
+}
 export function useCircuitDistances() {
   return useLiveQuery(async () => alive(await db.circuit_distance.toArray()), [])
 }
