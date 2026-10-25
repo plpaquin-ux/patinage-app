@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Empty, Field, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import { useAthletes, useCourse, useCourses, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
@@ -172,6 +172,8 @@ function CourseForm({ epreuveId, ordre, onDone }: { epreuveId: string; ordre: nu
 export function CoursePage() {
   const { id } = useParams()
   const nav = useNavigate()
+  // Arrivée par un lien profond redirigé depuis /chrono/:id : le retour ramène à la page d'origine (tableau de bord, historique…).
+  const retour = (useLocation().state as { retour?: boolean } | null)?.retour === true
   const course = useCourse(id)
   const epreuve = useEpreuve(course?.epreuve_id)
   const competition = useLiveQuery(() => (epreuve ? db.competition.get(epreuve.competition_id) : undefined), [epreuve?.competition_id])
@@ -250,7 +252,7 @@ export function CoursePage() {
   const sansResultat = !participations || participations.length === 0
 
   return (
-    <Page title={titre} back={`/epreuves/${course.epreuve_id}`}>
+    <Page title={titre} back={retour ? true : `/epreuves/${course.epreuve_id}`}>
       <div className="card">
         <div style={{ fontWeight: 700 }}>{competition?.nom}</div>
         <small>{[piste?.nom, epreuve?.nom, quand].filter(Boolean).join(' · ')}</small>

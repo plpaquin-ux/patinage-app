@@ -1,7 +1,7 @@
 # Patinage – Suivi de performance : état de l'application
 
 > Document de référence, **à mettre à jour à chaque modification** (voir `CLAUDE.md`).
-> Dernière mise à jour : 2026-10-25 (page de manche fusionnée). Version déployée : https://plpaquin-ux.github.io/patinage-app/
+> Dernière mise à jour : 2026-10-25 (page de manche fusionnée, redirection des liens profonds). Version déployée : https://plpaquin-ux.github.io/patinage-app/
 
 ## 1. Objectif
 
@@ -49,7 +49,7 @@ src/
     Home.tsx               Accueil : raccourcis, à venir, derniers chronos, compétitions récentes
     TableauDeBord.tsx      Page /tableau : tableau de bord interne (choix de l'athlète, hors ligne, liens vers les fiches chrono)
     Chrono.tsx             Préparation (athlète, contexte, distance, longueur du tour) + chrono en direct
-    ChronoEdit.tsx         Page /chrono/:id : enrobage de ChronoFiche (entraînement, liens profonds depuis l'accueil, l'historique, le tableau de bord)
+    ChronoEdit.tsx         Page /chrono/:id : fiche d'un chrono d'entraînement ; un chrono de compétition y est redirigé vers /courses/:id (state `retour`)
     Competitions.tsx       Liste, formulaire, détail (épreuves, résultat global, groupes), EpreuveForm
     Epreuve.tsx            EpreuvePage (manches) et CoursePage (page unique de la manche : fiche par athlète + détails de la manche repliés)
     Saisie.tsx             Saisie rapide d'un résultat passé (sans chrono)
@@ -132,7 +132,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 - Préparation : athlète, contexte (entraînement → séance ; compétition → compétition / épreuve / manche), longueur du tour (déduite du circuit, saisie libre en entraînement), tours attendus (calculés, modifiables).
 - Écran de course : compteur, tour en cours, tours n / attendus, meilleur tour ; boutons DÉPART / **TOUR** / **ARRIVÉE** fixes sous le compteur, liste des tours défilante (dernier en haut) ; « Annuler le dernier tour ».
 - Arrivée : « Enregistrer et réviser », « Recommencer », « Abandonner » ; **fusion de deux tours** (appui de trop) avant enregistrement.
-- Enregistrement : chrono + tours (captés figés) + participation si compétition ; `debutee_a` de la course renseignée au premier chrono. En compétition, on retombe directement sur la **page de la manche** (`/courses/:id`) ; en entraînement, sur `/chrono/:id`.
+- Enregistrement : chrono + tours (captés figés) + participation si compétition ; `debutee_a` de la course renseignée au premier chrono. En compétition, on retombe directement sur la **page de la manche** (`/courses/:id`) ; en entraînement, sur `/chrono/:id`. Un chrono de compétition n'a qu'un seul écran : `/chrono/:id` redirige vers sa manche (liens de l'accueil, de l'historique, du tableau de bord, de la saisie rapide) avec `state.retour`, et le bouton retour de la manche ramène alors à la page d'origine (`nav(-1)`) plutôt qu'à l'épreuve.
 - **Fiche de chrono** (`ChronoFiche`, sections ordonnées selon l'usage en aréna) : en-tête (athlète, temps retenu, « 4ᵉ / 5 », badges) ; *Résultat* (rang officiel, patineurs au départ — champ de la manche —, statut, points, temps officiel + écart) ; *Tours* éditables (capté affiché à côté, ajout/suppression/fusion tracés) ; *Détail du temps* repliable (calculé, ajusté, tours attendus, longueur, incomplet, note — ouvert en entraînement) ; *Ressenti, vidéo et commentaire* ; *Autres détails du résultat* repliable (position à l'arrivée, position de départ, couloir LP, sprint mass start, relais, qualifiée). Date de la course et date de saisie affichées séparément.
 
 ## 7. Autres écrans
@@ -171,6 +171,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 | 2026-10-21 | Page publique : « Podiums » remplacé par « Meilleur classement » (rang final), médailles limitées aux finales A |
 | 2026-10-21 | Page publique de partage (`/partage/:jeton`) : portrait, records, évolution, courses par compétition, lecteur YouTube en modale ; liens gérés dans Plus › Athlètes ; champ vidéo dans la saisie rapide |
 | 2026-10-24 | **Incident en compétition** : `compte_id` périmé en `localStorage` → toutes les écritures refusées par le RLS, file de sync purgée après 5 tentatives (données intactes sur le téléphone seulement). Correctifs : trigger `fn_corriger_compte` (migration 8) ; la file ne jette plus rien ; bouton « Renvoyer les données locales » |
+| 2026-10-25 | `/chrono/:id` redirige un chrono de compétition vers sa page de manche (retour vers la page d'origine) ; la fiche seule ne sert plus qu'aux entraînements |
 | 2026-10-25 | **Page de manche fusionnée** : la fiche de chrono (`ChronoFiche`) s'intègre à `/courses/:id` (une par athlète), le chrono y retombe directement, détails de la manche repliés (`Pliable`), champ vidéo unique, patineurs au départ à côté du rang. Point de retour : commit `6b59303` |
 | 2026-10-25 | Cause racine : politique `compte_membre_manage` récursive (erreur 500 depuis le 23) réécrite (migration 9). Fusion des deux comptes « Famille » et dédoublonnage des référentiels (migration 10). App : la base locale n'est jamais effacée s'il reste des éléments en attente (bascule de compte, changement de compte, déconnexion) |
 
