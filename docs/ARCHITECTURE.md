@@ -1,11 +1,11 @@
 # Patinage – Suivi de performance : état de l'application
 
 > Document de référence, **à mettre à jour à chaque modification** (voir `CLAUDE.md`).
-> Dernière mise à jour : 2026-10-25 (page de manche fusionnée, redirection des liens profonds). Version déployée : https://plpaquin-ux.github.io/patinage-app/
+> Dernière mise à jour : 2026-10-25 (distance par course ; vocabulaire épreuve → courses). Version déployée : https://plpaquin-ux.github.io/patinage-app/
 
 ## 1. Objectif
 
-PWA mobile (hors ligne) pour chronométrer et suivre les performances d'un ou plusieurs athlètes en patinage de vitesse (courte piste et longue piste) : chrono par tour en aréna, résultats par compétition / épreuve / manche, saisie de résultats passés, entraînements, historique et évolution des temps. Base transactionnelle Postgres (Supabase) pensée pour l'analyse.
+PWA mobile (hors ligne) pour chronométrer et suivre les performances d'un ou plusieurs athlètes en patinage de vitesse (courte piste et longue piste) : chrono par tour en aréna, résultats par compétition / épreuve / course, saisie de résultats passés, entraînements, historique et évolution des temps. Base transactionnelle Postgres (Supabase) pensée pour l'analyse.
 
 ## 2. Infrastructure
 
@@ -32,7 +32,7 @@ src/
   components/Chart.tsx     Graphique SVG d'évolution (partagé par Historique et la page publique)
   components/VideoModal.tsx Lecteur vidéo en modale (YouTube intégré, lien externe sinon) + icône ▶
   components/TableauDeBord.tsx Vue « tableau de bord » d'un athlète (onglets Portrait / Compétitions, vidéos) — partagée par /tableau et /partage
-  components/ChronoFiche.tsx Fiche complète d'un chrono (en-tête, résultat, tours, détail du temps, ressenti/vidéo/commentaire) — intégrée à la page de manche et à /chrono/:id ; exporte Pliable, NumInput, Ressenti
+  components/ChronoFiche.tsx Fiche complète d'un chrono (en-tête, résultat, tours, détail du temps, ressenti/vidéo/commentaire) — intégrée à la page de course et à /chrono/:id ; exporte Pliable, NumInput, Ressenti
   lib/types.ts             Types miroir des tables, enums, libellés FR, SYNC_TABLES, SERVER_ONLY_COLUMNS
   lib/supabase.ts          Client Supabase (schema: 'patinage')
   lib/db.ts                Schéma Dexie (v2), tables + outbox + meta
@@ -51,7 +51,7 @@ src/
     Chrono.tsx             Préparation (athlète, contexte, distance, longueur du tour) + chrono en direct
     ChronoEdit.tsx         Page /chrono/:id : fiche d'un chrono d'entraînement ; un chrono de compétition y est redirigé vers /courses/:id (state `retour`)
     Competitions.tsx       Liste, formulaire, détail (épreuves, résultat global, groupes), EpreuveForm
-    Epreuve.tsx            EpreuvePage (manches) et CoursePage (page unique de la manche : fiche par athlète + détails de la manche repliés)
+    Epreuve.tsx            EpreuvePage (courses de l'épreuve, formulaire de course avec distance) et CoursePage (page unique d'une course : fiche par athlète + détails de la course)
     Saisie.tsx             Saisie rapide d'un résultat passé (sans chrono)
     Entrainement.tsx       Séances d'entraînement et leurs chronos
     Historique.tsx         Records, graphique d'évolution, tableau, filtres (piste, distance, longueur)
@@ -79,8 +79,8 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
         ├─ competition (saison, circuit, piste, dates, longueur_piste_m surcharge)
         │    ├─ groupe
         │    ├─ inscription_competition (athlète : dossard, rang_final, nb_participants, points_total)
-        │    └─ epreuve (distance, type_course, groupe)
-        │         └─ course (type_manche, lettre_finale, ordre, heure, nb_patineurs, conditions)
+        │    └─ epreuve (distance nominale, type_course, groupe)
+        │         └─ course (distance courue, type_manche, lettre_finale, ordre, heure, nb_patineurs, conditions)
         │              └─ participation (athlète, chrono, statut, rangs, points, couloir…)
         ├─ partage (athlète, jeton secret, libellé, actif, nb_acces, dernier_acces_a) — lien public
         ├─ seance_entrainement (athlète, piste, date, type, objectif, ressenti)
@@ -91,7 +91,8 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 ### Règles métier
 - **Temps en millisecondes entières.** `temps_retenu_ms = coalesce(officiel, ajusté, calculé)` (colonne générée) ; `ecart_officiel_ms` idem.
 - **Tours** : `temps_tour_capture_ms`, `cumul_capture_ms`, `capture_a` sont figés par trigger à l'insertion ; `temps_tour_ms` est éditable. `chrono.temps_calcule_ms` et `nb_tours_enregistres` recalculés par trigger.
-- **Manches libres** : une épreuve a 0..n courses typées (`serie_unique`, `qualification`, `repechage`, `quart_de_finale`, `demi_finale`, `finale` + lettre) sans séquence imposée.
+- **Épreuve → courses**. Une *épreuve* regroupe les courses qui mènent à un même classement ; elle a 0..n *courses* typées (`serie_unique`, `qualification`, `repechage`, `quart_de_finale`, `demi_finale`, `finale` + lettre) sans séquence imposée. Dans l'interface on dit **épreuve** et **course** (jamais « manche », qui ne subsiste que dans les noms de colonnes `type_manche` / `ordre_manche`).
+- **Distance par course** (`course.distance_id`, migration 11) : les courses d'une épreuve n'ont pas forcément la même distance — en InterRégional, l'épreuve du 1500 m se compose d'une qualification de **1000 m** et d'une finale de 1500 m ; le 500 m n'a qu'une finale. `epreuve.distance_id` reste la distance **nominale** (celle de la finale) : nom de l'épreuve, tri, valeur par défaut des nouvelles courses. Les vues d'analyse, les records et le portrait public lisent la distance de la **course** (la qualification de 1000 m compte comme un 1000 m), et exposent `epreuve_distance` / `epreuve_metres` pour le regroupement.
 - **Statuts de résultat** : `termine`, `penalite`, `disqualifie`, `avance` (ADV), `chute`, `abandon`, `absent`, `non_classe`. Les records n'incluent que `termine` et `avance`.
 - **Longueur du tour** : compétition > circuit (InterRégional 100 m, Provincial CP 111,12 m, LP 400 m). Copiée dans `chrono.longueur_piste_m` à la capture → l'historique ne bouge pas si les référentiels changent. Tours attendus = ⌈distance ÷ longueur⌉ (1000 m : 10 à 100 m, 9 à 111,12 m). Records distingués par longueur.
 - **Programme par circuit** (`circuit_distance`) : le formulaire d'épreuve et la saisie rapide ne proposent que les distances du circuit ; repli sur le type de piste.
@@ -114,6 +115,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 8. `patinage_corriger_compte_orphelin` – `fn_corriger_compte` + trigger `trg_corriger_compte` sur toutes les tables (filet de sécurité `compte_id`)
 9. `patinage_compte_membre_sans_recursion` – `fn_mes_comptes_proprietaire`, politique `compte_membre_manage` réécrite sans récursion
 10. `patinage_fusion_comptes_famille` – migration de données (une fois) : fusion des deux comptes « Famille », dédoublonnage des référentiels, repointage des clés étrangères
+11. `patinage_distance_par_course` – `course.distance_id` (rempli depuis l'épreuve, puis `not null`), `v_participation_detail` et `fn_partage_lecture` lisent la distance de la course et ajoutent `epreuve_id` / `epreuve_distance` / `epreuve_metres`
 
 ## 5. Synchronisation hors ligne
 
@@ -129,23 +131,23 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 ## 6. Chrono (usage en aréna)
 
 - Horodatages absolus (`Date.now()`) : exact même écran verrouillé ou onglet suspendu ; état dans `localStorage` (survit à un rechargement) ; Wake Lock ; vibration.
-- Préparation : athlète, contexte (entraînement → séance ; compétition → compétition / épreuve / manche), longueur du tour (déduite du circuit, saisie libre en entraînement), tours attendus (calculés, modifiables).
+- Préparation : athlète, contexte (entraînement → séance ; compétition → compétition / épreuve / course ; la distance est celle de la course choisie), longueur du tour (déduite du circuit, saisie libre en entraînement), tours attendus (calculés, modifiables).
 - Écran de course : compteur, tour en cours, tours n / attendus, meilleur tour ; boutons DÉPART / **TOUR** / **ARRIVÉE** fixes sous le compteur, liste des tours défilante (dernier en haut) ; « Annuler le dernier tour ».
 - Arrivée : « Enregistrer et réviser », « Recommencer », « Abandonner » ; **fusion de deux tours** (appui de trop) avant enregistrement.
-- Enregistrement : chrono + tours (captés figés) + participation si compétition ; `debutee_a` de la course renseignée au premier chrono. En compétition, on retombe directement sur la **page de la manche** (`/courses/:id`) ; en entraînement, sur `/chrono/:id`. Un chrono de compétition n'a qu'un seul écran : `/chrono/:id` redirige vers sa manche (liens de l'accueil, de l'historique, du tableau de bord, de la saisie rapide) avec `state.retour`, et le bouton retour de la manche ramène alors à la page d'origine (`nav(-1)`) plutôt qu'à l'épreuve.
-- **Fiche de chrono** (`ChronoFiche`, sections ordonnées selon l'usage en aréna) : en-tête (athlète, temps retenu, « 4ᵉ / 5 », badges) ; *Résultat* (rang officiel, patineurs au départ — champ de la manche —, statut, points, temps officiel + écart) ; *Tours* éditables (capté affiché à côté, ajout/suppression/fusion tracés) ; *Détail du temps* repliable (calculé, ajusté, tours attendus, longueur, incomplet, note — ouvert en entraînement) ; *Ressenti, vidéo et commentaire* ; *Autres détails du résultat* repliable (position à l'arrivée, position de départ, couloir LP, sprint mass start, relais, qualifiée). Date de la course et date de saisie affichées séparément.
+- Enregistrement : chrono + tours (captés figés) + participation si compétition ; `debutee_a` de la course renseignée au premier chrono. En compétition, on retombe directement sur la **page de la course** (`/courses/:id`) ; en entraînement, sur `/chrono/:id`. Un chrono de compétition n'a qu'un seul écran : `/chrono/:id` redirige vers sa course (liens de l'accueil, de l'historique, du tableau de bord, de la saisie rapide) avec `state.retour`, et le bouton retour de la course ramène alors à la page d'origine (`nav(-1)`) plutôt qu'à l'épreuve.
+- **Fiche de chrono** (`ChronoFiche`) : en-tête (athlète, temps retenu, « 4ᵉ / 5 », badges) ; *Tours* éditables (capté affiché à côté, ajout/suppression/fusion tracés) ; *Détail du temps* repliable (calculé, ajusté, tours attendus, longueur, incomplet, note — ouvert en entraînement) ; *Résultat* en un seul bloc (rang officiel, patineurs au départ — champ de la course —, statut, points, temps officiel + écart, position à l'arrivée, position de départ, couloir LP, sprint mass start, relais, qualifiée) ; *Ressenti, vidéo et commentaire*, auquel la page de course ajoute les **détails de la course** (prop `complement`) quand un seul athlète a couru. Date de la course et date de saisie affichées séparément.
 
 ## 7. Autres écrans
 
-- **Compétitions** : liste filtrable CP/LP avec résultat global ; formulaire (circuit, aréna, saison déduite, longueur surchargeable, inscriptions) ; détail : épreuves (manches créées au choix : qualif + finale / finale directe / série unique), résultat global par athlète, groupes, « Saisir un résultat ».
-- **Épreuve** : liste des manches avec les temps et rangs par athlète ; « + Manche ».
-- **Manche** (`/courses/:id`, page unique) : en-tête de compétition ; la **fiche complète de chaque athlète** (voir § 6) directement dans la page ; « Chrono » ou « Saisir un temps » par athlète inscrit sans résultat (la saisie manuelle crée la fiche sur place) ; **Détails de la manche** repliés par défaut (numéro officiel, heure prévue, heure réelle — renseignée par le premier chrono —, règle de qualification, conditions LP, glace, commentaire ; résumé affiché sur l'en-tête fermé). La vidéo n'a plus qu'un seul champ à l'écran (`participation.url_video`) ; `course.url_video` reste en base comme repli du portrait mais n'est plus saisi. Les tables `course` et `participation` restent distinctes : c'est l'écran qui fusionne, pas le modèle.
-- **Saisie rapide** (`/saisie`) : compétition existante ou nouvelle, distance (programme du circuit), manche, temps officiel, rang, statut, points, patineurs au départ, commentaire, classement final / nb dans la catégorie ; « Enregistrer et saisir le suivant » ; refus des doublons.
+- **Compétitions** : liste filtrable CP/LP avec résultat global ; formulaire (circuit, aréna, saison déduite, longueur surchargeable, inscriptions) ; détail : épreuves (courses créées au choix : qualif + finale / finale directe / série unique, avec **distance de la qualification** si elle diffère de la finale), résultat global par athlète, groupes, « Saisir un résultat ». La liste des épreuves affiche la distance d'une course quand elle diffère (« Qualification 1000 m → Finale »).
+- **Épreuve** : liste des courses (distance affichée si elle diffère de l'épreuve) avec les temps et rangs par athlète ; « + Course » (type, finale, numéro, **distance de la course**, par défaut celle de l'épreuve).
+- **Course** (`/courses/:id`, page unique) : en-tête (compétition, épreuve, distance de la course si elle diffère) ; la **fiche complète de chaque athlète** (voir § 6) directement dans la page ; « Chrono » ou « Saisir un temps » par athlète inscrit sans résultat (la saisie manuelle crée la fiche sur place) ; **Détails de la course** (`DetailsCourse` : numéro officiel, heure prévue, heure réelle — renseignée par le premier chrono —, règle de qualification, conditions LP, glace, commentaire) : intégrés au dernier bloc de la fiche quand un seul athlète a couru ; sinon (0 ou plusieurs athlètes) dans une section repliée à part, avec résumé sur l'en-tête fermé, puisqu'ils sont communs à tous. La vidéo n'a plus qu'un seul champ à l'écran (`participation.url_video`) ; `course.url_video` reste en base comme repli du portrait mais n'est plus saisi. Les tables `course` et `participation` restent distinctes : c'est l'écran qui fusionne, pas le modèle.
+- **Saisie rapide** (`/saisie`) : compétition existante ou nouvelle, distance de la course (programme du circuit), type de course, **épreuve de rattachement** si sa distance diffère (qualif 1000 m du 1500 m), temps officiel, rang, statut, points, patineurs au départ, commentaire, classement final / nb dans la catégorie ; « Enregistrer et saisir le suivant » ; refus des doublons.
 - **Entraînement** : séances (date, piste, type, objectif, ressenti) et chronos libres.
 - **Historique** : par athlète, type de piste, distance ; record et dernier temps ; filtre par longueur de tour (avertissement si mélange) ; option entraînements ; graphique SVG (une série, infobulle au toucher) ; tableau.
 - **Plus** : compte (changer, recharger les données, renvoyer les données locales, déconnexion), Athlètes (+ bloc « Partage avec la famille » : créer / partager (Web Share) / copier / désactiver / supprimer un lien, nombre d'ouvertures), Arénas et pistes, Circuits (longueur du tour), Distances (libellé, tours par défaut, circuits où elle se court), Saisons — tous modifiables.
 - **Tableau de bord** (`/tableau`, 2ᵉ onglet de la barre du bas, icône grille) : même vue que la page publique, calculée hors ligne par `portraitLocal()` (réactive via `useLiveQuery`), sélecteur d'athlète (mémorisé comme athlète par défaut), liens vers la fiche chrono (date dans le tableau d'évolution, bouton dans le détail d'une course). **La structure du portrait existe en deux exemplaires (SQL `fn_partage_lecture` et `portraitLocal`) : toute évolution se fait des deux côtés.**
-- **Page publique** (`/partage/:jeton`) : sans connexion ni barre de navigation ; recharge au retour au premier plan (suivi en direct pendant une compétition) et bouton ↻. Onglet *Portrait* : compteurs (compétitions, courses, meilleur classement final en compétition « 7ᵉ / 20 », vidéos), CP/LP, cartes « Meilleurs temps » par distance (distinguées par longueur de tour si plusieurs ; dernier temps et écart), touche → graphique d'évolution + tableau. Onglet *Compétitions* : cartes repliables (la plus récente ouverte ; badges « En cours » / « À venir »), résultat global, courses regroupées par épreuve (manche, rang / nb, temps, statut, ▶ vidéo), touche une course → temps des tours, commentaire, points. Médailles 🥇🥈🥉 seulement sur le classement final et les finales A (un top 3 en finale D n'est pas un podium). Vidéos : modale avec lecteur YouTube intégré (`youtube-nocookie`, autoplay, `t=` respecté) sans quitter la page ; lien non YouTube → bouton d'ouverture. Champ « Vidéo (lien YouTube) » dans la révision de chrono, la fiche de manche et la saisie rapide.
+- **Page publique** (`/partage/:jeton`) : sans connexion ni barre de navigation ; recharge au retour au premier plan (suivi en direct pendant une compétition) et bouton ↻. Onglet *Portrait* : compteurs (compétitions, courses, meilleur classement final en compétition « 7ᵉ / 20 », vidéos), CP/LP, cartes « Meilleurs temps » par distance (distinguées par longueur de tour si plusieurs ; dernier temps et écart), touche → graphique d'évolution + tableau. Onglet *Compétitions* : cartes repliables (la plus récente ouverte ; badges « En cours » / « À venir »), résultat global, courses regroupées par épreuve (type de course, rang / nb, temps, statut, ▶ vidéo), touche une course → temps des tours, commentaire, points. Médailles 🥇🥈🥉 seulement sur le classement final et les finales A (un top 3 en finale D n'est pas un podium). Vidéos : modale avec lecteur YouTube intégré (`youtube-nocookie`, autoplay, `t=` respecté) sans quitter la page ; lien non YouTube → bouton d'ouverture. Champ « Vidéo (lien YouTube) » dans la révision de chrono, la fiche de course et la saisie rapide.
 
 ## 8. Conventions
 
@@ -171,6 +173,8 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 | 2026-10-21 | Page publique : « Podiums » remplacé par « Meilleur classement » (rang final), médailles limitées aux finales A |
 | 2026-10-21 | Page publique de partage (`/partage/:jeton`) : portrait, records, évolution, courses par compétition, lecteur YouTube en modale ; liens gérés dans Plus › Athlètes ; champ vidéo dans la saisie rapide |
 | 2026-10-24 | **Incident en compétition** : `compte_id` périmé en `localStorage` → toutes les écritures refusées par le RLS, file de sync purgée après 5 tentatives (données intactes sur le téléphone seulement). Correctifs : trigger `fn_corriger_compte` (migration 8) ; la file ne jette plus rien ; bouton « Renvoyer les données locales » |
+| 2026-10-25 | **Distance par course** (migration 11) : `course.distance_id`, formulaire d'épreuve avec distance de qualification, distance par course dans l'épreuve / le chrono / la saisie rapide, portrait regroupé par distance d'épreuve ; « manche » → « course » dans toute l'interface. Données du 24 oct. restructurées : 1500 m = qualif 1000 m + finale ; courses vides supprimées |
+| 2026-10-25 | Fiche de chrono réordonnée : tours → détail du temps → *Résultat* (un seul bloc) → ressenti/vidéo/commentaire + détails de la manche (un seul athlète). `.grid2` à colonnes `minmax(0, 1fr)` ; champs date-heure en pleine largeur |
 | 2026-10-25 | `/chrono/:id` redirige un chrono de compétition vers sa page de manche (retour vers la page d'origine) ; la fiche seule ne sert plus qu'aux entraînements |
 | 2026-10-25 | **Page de manche fusionnée** : la fiche de chrono (`ChronoFiche`) s'intègre à `/courses/:id` (une par athlète), le chrono y retombe directement, détails de la manche repliés (`Pliable`), champ vidéo unique, patineurs au départ à côté du rang. Point de retour : commit `6b59303` |
 | 2026-10-25 | Cause racine : politique `compte_membre_manage` récursive (erreur 500 depuis le 23) réécrite (migration 9). Fusion des deux comptes « Famille » et dédoublonnage des référentiels (migration 10). App : la base locale n'est jamais effacée s'il reste des éléments en attente (bascule de compte, changement de compte, déconnexion) |

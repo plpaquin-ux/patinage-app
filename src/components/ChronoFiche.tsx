@@ -11,7 +11,7 @@ import { TimeInput } from './TimeInput'
 /**
  * Fiche complète d'un chrono : en-tête (athlète, temps retenu), résultat de course, tours,
  * détail du temps, ressenti / vidéo / commentaire. Sans `<Page>` : s'insère dans la page de
- * manche (une fiche par athlète) ou dans la page /chrono/:id (entraînement, liens profonds).
+ * course (une fiche par athlète) ou dans la page /chrono/:id (entraînement, liens profonds).
  *
  * Sections ordonnées selon l'usage en aréna : ce qu'on remplit en direct est en haut, les
  * champs rarement touchés sont repliés.
@@ -19,11 +19,14 @@ import { TimeInput } from './TimeInput'
 export function ChronoFiche({
   chronoId,
   contexte = true,
+  complement,
   onDeleted,
 }: {
   chronoId: string
-  /** Afficher la compétition / séance et la piste dans l'en-tête (inutile dans la page de manche, qui les montre déjà). */
+  /** Afficher la compétition / séance et la piste dans l'en-tête (inutile dans la page de course, qui les montre déjà). */
   contexte?: boolean
+  /** Champs supplémentaires (p. ex. les détails de la course) ajoutés au bas du dernier bloc. */
+  complement?: ReactNode
   onDeleted?: () => void
 }) {
   const chrono = useChrono(chronoId)
@@ -180,40 +183,6 @@ export function ChronoFiche({
         </div>
       </div>
 
-      {/* ---- Résultat de la course : ce qu'on saisit en direct au tableau d'affichage ---- */}
-      {participation && (
-        <>
-          <h3 style={{ marginTop: 18 }}>Résultat</h3>
-          <div className="card">
-            <div className="grid2">
-              <Field label="Rang officiel">
-                <NumInput value={participation.rang_officiel} onChange={(v) => patchParticipation({ rang_officiel: v })} />
-              </Field>
-              <Field label="Patineurs au départ">
-                <NumInput value={course?.nb_patineurs ?? null} onChange={(v) => patchCourse({ nb_patineurs: v })} />
-              </Field>
-            </div>
-            <div className="grid2">
-              <Field label="Statut">
-                <select value={participation.statut} onChange={(e) => patchParticipation({ statut: e.target.value as StatutResultat })}>
-                  {(Object.keys(LIBELLES.statut) as StatutResultat[]).map((s) => (
-                    <option key={s} value={s}>
-                      {LIBELLES.statut[s]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Points">
-                <NumInput value={participation.points} onChange={(v) => patchParticipation({ points: v })} decimal />
-              </Field>
-            </div>
-            <Field label="Temps officiel" hint={ecart != null ? `Écart avec ton chrono : ${fmtDelta(ecart)}` : 'Le temps des officiels prime sur les autres.'}>
-              <TimeInput value={ch.temps_officiel_ms} onChange={(ms) => patchChrono({ temps_officiel_ms: ms })} />
-            </Field>
-          </div>
-        </>
-      )}
-
       {/* ---- Tours ---- */}
       <div className="section-head">
         <h3>
@@ -225,7 +194,7 @@ export function ChronoFiche({
         </button>
       </div>
       <div className="card" style={{ padding: '6px 10px' }}>
-        {trs.length === 0 && <Empty>{participation ? 'Aucun tour. Saisis le temps officiel ci-dessus ou ajoute des tours.' : 'Aucun tour. Saisis le temps total dans « Détail du temps » ou ajoute des tours.'}</Empty>}
+        {trs.length === 0 && <Empty>{participation ? 'Aucun tour. Saisis le temps officiel ci-dessous ou ajoute des tours.' : 'Aucun tour. Saisis le temps total dans « Détail du temps » ou ajoute des tours.'}</Empty>}
         {trs.map((t, i) => {
           const cumul = trs.slice(0, i + 1).reduce((s, x) => s + x.temps_tour_ms, 0)
           const delta = t.temps_tour_capture_ms != null ? t.temps_tour_ms - t.temps_tour_capture_ms : null
@@ -256,7 +225,7 @@ export function ChronoFiche({
         })}
       </div>
 
-      {/* ---- Détail du temps : replié en compétition (le temps officiel est déjà au-dessus), ouvert en entraînement ---- */}
+      {/* ---- Détail du temps : replié en compétition (le temps officiel est dans Résultat), ouvert en entraînement ---- */}
       <Pliable titre="Détail du temps" resume={trs.length ? `calculé ${fmtMs(calcule)}` : undefined} ouvert={!participation}>
         <div className="grid2">
           <Field label="Calculé (somme des tours)">
@@ -303,24 +272,36 @@ export function ChronoFiche({
         </Field>
       </Pliable>
 
-      {/* ---- Ressenti, vidéo, commentaire ---- */}
-      {participation ? (
+      {/* ---- Résultat : tout ce qui qualifie la course de l'athlète ---- */}
+      {participation && (
         <>
-          <h3 style={{ marginTop: 18 }}>Ressenti, vidéo et commentaire</h3>
+          <h3 style={{ marginTop: 18 }}>Résultat</h3>
           <div className="card">
-            <Field label="Ressenti (1–5)">
-              <Ressenti value={participation.ressenti} onChange={(v) => patchParticipation({ ressenti: v })} />
+            <div className="grid2">
+              <Field label="Rang officiel">
+                <NumInput value={participation.rang_officiel} onChange={(v) => patchParticipation({ rang_officiel: v })} />
+              </Field>
+              <Field label="Patineurs au départ">
+                <NumInput value={course?.nb_patineurs ?? null} onChange={(v) => patchCourse({ nb_patineurs: v })} />
+              </Field>
+            </div>
+            <div className="grid2">
+              <Field label="Statut">
+                <select value={participation.statut} onChange={(e) => patchParticipation({ statut: e.target.value as StatutResultat })}>
+                  {(Object.keys(LIBELLES.statut) as StatutResultat[]).map((s) => (
+                    <option key={s} value={s}>
+                      {LIBELLES.statut[s]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Points">
+                <NumInput value={participation.points} onChange={(v) => patchParticipation({ points: v })} decimal />
+              </Field>
+            </div>
+            <Field label="Temps officiel" hint={ecart != null ? `Écart avec ton chrono : ${fmtDelta(ecart)}` : 'Le temps des officiels prime sur les autres.'}>
+              <TimeInput value={ch.temps_officiel_ms} onChange={(ms) => patchChrono({ temps_officiel_ms: ms })} />
             </Field>
-            <Field label="Vidéo (lien YouTube)" hint="Lisible dans la page partagée avec la famille">
-              <input type="url" inputMode="url" defaultValue={participation.url_video ?? ''} onBlur={(e) => patchParticipation({ url_video: e.target.value || null })} placeholder="https://youtu.be/…" />
-            </Field>
-            <Field label="Commentaire sur la course">
-              <textarea defaultValue={participation.commentaire ?? ''} onBlur={(e) => patchParticipation({ commentaire: e.target.value || null })} />
-            </Field>
-          </div>
-
-          {/* ---- Autres détails du résultat : rarement remplis en direct ---- */}
-          <Pliable titre="Autres détails du résultat" resume={[participation.position_arrivee ? `${participation.position_arrivee}ᵉ à l'arrivée` : '', participation.couloir_depart ? `départ ${participation.couloir_depart}` : '', participation.qualifie_suivant ? 'qualifiée' : ''].filter(Boolean).join(' · ') || undefined}>
             <div className="grid2">
               <Field label="Position à l'arrivée" hint="Avant pénalités">
                 <NumInput value={participation.position_arrivee} onChange={(v) => patchParticipation({ position_arrivee: v })} />
@@ -365,17 +346,39 @@ export function ChronoFiche({
             )}
             <label className="check">
               <input type="checkbox" checked={participation.qualifie_suivant ?? false} onChange={(e) => patchParticipation({ qualifie_suivant: e.target.checked })} />
-              Qualifiée pour la manche suivante
+              Qualifiée pour la course suivante (finale)
             </label>
-          </Pliable>
+          </div>
+
+          {/* ---- Ressenti, vidéo, commentaire — et les détails de la course quand la page les confie à la fiche ---- */}
+          <h3 style={{ marginTop: 18 }}>{complement ? 'Ressenti, vidéo et détails de la course' : 'Ressenti, vidéo et commentaire'}</h3>
+          <div className="card">
+            <Field label="Ressenti (1–5)">
+              <Ressenti value={participation.ressenti} onChange={(v) => patchParticipation({ ressenti: v })} />
+            </Field>
+            <Field label="Vidéo (lien YouTube)" hint="Lisible dans la page partagée avec la famille">
+              <input type="url" inputMode="url" defaultValue={participation.url_video ?? ''} onBlur={(e) => patchParticipation({ url_video: e.target.value || null })} placeholder="https://youtu.be/…" />
+            </Field>
+            <Field label="Commentaire sur la course">
+              <textarea defaultValue={participation.commentaire ?? ''} onBlur={(e) => patchParticipation({ commentaire: e.target.value || null })} />
+            </Field>
+            {complement && (
+              <div style={{ borderTop: '1px solid var(--line)', marginTop: 14, paddingTop: 12 }}>
+                <h3 style={{ marginBottom: 10 }}>Détails de la course</h3>
+                {complement}
+              </div>
+            )}
+          </div>
         </>
-      ) : (
+      )}
+      {!participation && (
         <div className="card">
           <Field label="Commentaire">
             <textarea defaultValue={ch.commentaire ?? ''} onBlur={(e) => patchChrono({ commentaire: e.target.value || null })} />
           </Field>
         </div>
       )}
+
 
       <button className="btn-ghost btn-block" onClick={supprimerChrono} style={{ color: 'var(--danger)', marginBottom: 12 }}>
         {participation ? `Supprimer le résultat${athlete ? ` de ${athlete.prenom}` : ''}` : 'Supprimer le chrono'}

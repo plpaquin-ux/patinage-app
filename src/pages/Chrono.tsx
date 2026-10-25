@@ -87,7 +87,7 @@ export default function ChronoPage() {
         if (course && !course.debutee_a) await update('course', course.id, { debutee_a: chrono.debute_a })
       }
       sw.reset()
-      // En compétition, on retombe sur la page de la manche (fiche intégrée) ; en entraînement, sur la fiche du chrono.
+      // En compétition, on retombe sur la page de la course (fiche intégrée) ; en entraînement, sur la fiche du chrono.
       nav(ctx.courseId ? `/courses/${ctx.courseId}` : `/chrono/${chrono.id}`, { replace: true })
     } finally {
       setSaving(false)
@@ -228,16 +228,18 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
       setCompetitionId(e.competition_id)
       setEpreuveId(e.id)
       setCourseId(c.id)
-      setDistanceId(e.distance_id)
+      setDistanceId(c.distance_id)
     })()
   }, [params])
 
-  // Distance déduite de l'épreuve en mode compétition
+  // Distance déduite de la course choisie (une qualification peut se courir sur une autre distance que l'épreuve)
   useEffect(() => {
     if (mode !== 'competition' || !epreuveId) return
+    const c = courses?.find((x) => x.id === courseId)
     const e = epreuves?.find((x) => x.id === epreuveId)
-    if (e) setDistanceId(e.distance_id)
-  }, [mode, epreuveId, epreuves])
+    if (c) setDistanceId(c.distance_id)
+    else if (e) setDistanceId(e.distance_id)
+  }, [mode, epreuveId, courseId, courses, epreuves])
 
   const distance: Distance | undefined = useMemo(() => distances?.find((d) => d.id === distanceId), [distances, distanceId])
 
@@ -358,19 +360,24 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
             </Field>
           )}
           {epreuveId && (
-            <Field label="Course (manche)">
+            <Field label="Course">
               <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
                 <option value="">— Choisir —</option>
-                {courses?.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {mancheLabel(c)}
-                    {c.numero_course ? ` · #${c.numero_course}` : ''}
-                  </option>
-                ))}
+                {courses?.map((c) => {
+                  const ep = epreuves?.find((x) => x.id === c.epreuve_id)
+                  const dc = c.distance_id !== ep?.distance_id ? distances?.find((d) => d.id === c.distance_id)?.libelle : null
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {mancheLabel(c)}
+                      {dc ? ` · ${dc}` : ''}
+                      {c.numero_course ? ` · #${c.numero_course}` : ''}
+                    </option>
+                  )
+                })}
               </select>
               {courses?.length === 0 && (
                 <small>
-                  Aucune course. <a href={`#/epreuves/${epreuveId}`}>Ajoute une manche à l'épreuve.</a>
+                  Aucune course. <a href={`#/epreuves/${epreuveId}`}>Ajoute une course à l'épreuve.</a>
                 </small>
               )}
             </Field>

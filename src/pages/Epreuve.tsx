@@ -3,10 +3,10 @@ import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Empty, Field, Page } from '../components/Layout'
 import { db } from '../lib/db'
-import { useAthletes, useCourse, useCourses, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
+import { useAthletes, useCircuitDistances, useCourse, useCourses, useDistances, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
 import { alive, create, softDelete, update } from '../lib/repo'
 import { fmtDate, fmtLongueur, fmtMs, fromLocalInput, longueurPiste, nbToursAttendus, retenu, toLocalInput } from '../lib/time'
-import { LIBELLES, mancheLabel, type TypeManche } from '../lib/types'
+import { LIBELLES, mancheLabel, type Course, type Distance, type TypeManche } from '../lib/types'
 import { ChronoFiche, NumInput, Pliable } from '../components/ChronoFiche'
 
 /* ------------------------------ Épreuve ------------------------------ */
@@ -19,9 +19,19 @@ export function EpreuvePage() {
   const pisteE = useLiveQuery(() => (competition?.piste_id ? db.piste.get(competition.piste_id) : undefined), [competition?.piste_id])
   const distance = useLiveQuery(() => (epreuve ? db.distance.get(epreuve.distance_id) : undefined), [epreuve?.distance_id])
   const courses = useCourses(id)
+  const allDistances = useDistances()
+  const liens = useCircuitDistances()
   const longueurE = longueurPiste(competition, circuitE, pisteE)
   const nbToursE = nbToursAttendus(distance?.metres, longueurE, distance?.nb_tours_defaut)
   const [showForm, setShowForm] = useState(false)
+  // Distances proposées pour une course : programme du circuit, sinon type de piste, sinon toutes
+  const distancesCircuit = (() => {
+    if (!allDistances) return []
+    const ids = new Set((liens ?? []).filter((l) => l.circuit_id === competition?.circuit_id).map((l) => l.distance_id))
+    if (competition?.circuit_id && ids.size > 0) return allDistances.filter((d) => ids.has(d.id))
+    const tp = pisteE?.type_piste ?? circuitE?.type_piste ?? null
+    return tp ? allDistances.filter((d) => d.type_piste === tp) : allDistances
+  })()
 
   const resume = useLiveQuery(async () => {
     if (!courses) return []
@@ -46,7 +56,7 @@ export function EpreuvePage() {
   }
 
   async function supprimer() {
-    if (!confirm('Supprimer cette épreuve et ses manches ?')) return
+    if (!confirm('Supprimer cette épreuve et ses courses ?')) return
     await softDelete('epreuve', epreuve!.id)
     nav(`/competitions/${epreuve!.competition_id}`, { replace: true })
   }
@@ -63,13 +73,21 @@ export function EpreuvePage() {
       </div>
 
       <div className="section-head">
-        <h3>Manches</h3>
+        <h3>Courses</h3>
         <button className="btn-sm" onClick={() => setShowForm(!showForm)}>
-          + Manche
+          + Course
         </button>
       </div>
-      {showForm && <CourseForm epreuveId={epreuve.id} ordre={(courses?.length ?? 0) + 1} onDone={() => setShowForm(false)} />}
-      {resume && resume.length === 0 && !showForm && <Empty>Aucune manche. Ajoute une qualification, une finale…</Empty>}
+      {showForm && (
+        <CourseForm
+          epreuveId={epreuve.id}
+          distanceDefaut={epreuve.distance_id}
+          distances={distancesCircuit.length > 0 ? distancesCircuit : (allDistances ?? [])}
+          ordre={(courses?.length ?? 0) + 1}
+          onDone={() => setShowForm(false)}
+        />
+      )}
+      {resume && resume.length === 0 && !showForm && <Empty>Aucune course. Ajoute une qualification, une finale…</Empty>}
       <ul className="list">
         {resume?.map(({ course, rows }) => (
           <li key={course.id}>
@@ -77,6 +95,7 @@ export function EpreuvePage() {
               <div className="grow">
                 <div className="title">
                   {mancheLabel(course)}
+                  {course.distance_id !== epreuve.distance_id ? ` · ${allDistances?.find((d) => d.id === course.distance_id)?.libelle ?? ''}` : ''}
                   {course.numero_course ? ` · #${course.numero_course}` : ''}
                 </div>
                 <div className="sub">
@@ -107,14 +126,16 @@ export function EpreuvePage() {
   )
 }
 
-function CourseForm({ epreuveId, ordre, onDone }: { epreuveId: string; ordre: number; onDone: () => void }) {
+function CourseForm({ epreuveId, distanceDefaut, distances, ordre, onDone }: { epreuveId: string; distanceDefaut: string; distances: Distance[]; ordre: number; onDone: () => void }) {
   const [type, setType] = useState<TypeManche>('finale')
   const [lettre, setLettre] = useState('A')
   const [numero, setNumero] = useState('')
+  const [distanceId, setDistanceId] = useState(distanceDefaut)
   async function submit(e: FormEvent) {
     e.preventDefault()
     await create('course', {
       epreuve_id: epreuveId,
+      distance_id: distanceId || distanceDefaut,
       type_manche: type,
       lettre_finale: type === 'finale' ? lettre.trim().toUpperCase() || null : null,
       ordre_manche: ordre,
@@ -134,7 +155,7 @@ function CourseForm({ epreuveId, ordre, onDone }: { epreuveId: string; ordre: nu
   return (
     <form className="card" onSubmit={submit}>
       <div className="grid2">
-        <Field label="Type de manche">
+        <Field label="Type de course">
           <select value={type} onChange={(e) => setType(e.target.value as TypeManche)}>
             {(Object.keys(LIBELLES.type_manche) as TypeManche[]).map((t) => (
               <option key={t} value={t}>
@@ -153,6 +174,17 @@ function CourseForm({ epreuveId, ordre, onDone }: { epreuveId: string; ordre: nu
           </Field>
         )}
       </div>
+      <Field label="Distance de la course" hint="Par défaut celle de l'épreuve ; une qualification peut se courir sur une autre distance.">
+        <select value={distanceId} onChange={(e) => setDistanceId(e.target.value)}>
+          {!distances.some((d) => d.id === distanceDefaut) && <option value={distanceDefaut}>Distance de l'épreuve</option>}
+          {distances.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.libelle}
+              {d.id === distanceDefaut ? ' (épreuve)' : ''}
+            </option>
+          ))}
+        </select>
+      </Field>
       <div className="actions">
         <button className="btn-primary">Ajouter</button>
         <button type="button" onClick={onDone}>
@@ -163,11 +195,11 @@ function CourseForm({ epreuveId, ordre, onDone }: { epreuveId: string; ordre: nu
   )
 }
 
-/* ------------------------------ Course (manche) ------------------------------ */
+/* ------------------------------ Course ------------------------------ */
 /**
- * Page unique d'une manche : la fiche complète de chaque athlète (résultat, tours, vidéo…)
- * est intégrée ici ; les détails propres à la manche (numéro officiel, heures, règle de
- * qualification, glace) sont repliés en bas, puisqu'on les remplit rarement en direct.
+ * Page unique d'une course (qualification, finale…) : la fiche complète de chaque athlète
+ * (tours, temps, résultat, vidéo…) est intégrée ici ; les détails propres à la course (numéro
+ * officiel, heures, règle de qualification, glace) suivent, dans le dernier bloc de la fiche.
  */
 export function CoursePage() {
   const { id } = useParams()
@@ -179,7 +211,8 @@ export function CoursePage() {
   const competition = useLiveQuery(() => (epreuve ? db.competition.get(epreuve.competition_id) : undefined), [epreuve?.competition_id])
   const piste = useLiveQuery(() => (competition?.piste_id ? db.piste.get(competition.piste_id) : undefined), [competition?.piste_id])
   const circuit = useLiveQuery(() => (competition?.circuit_id ? db.circuit.get(competition.circuit_id) : undefined), [competition?.circuit_id])
-  const distance = useLiveQuery(() => (epreuve ? db.distance.get(epreuve.distance_id) : undefined), [epreuve?.distance_id])
+  const distance = useLiveQuery(() => (course ? db.distance.get(course.distance_id) : undefined), [course?.distance_id])
+  const distanceEpreuve = useLiveQuery(() => (epreuve ? db.distance.get(epreuve.distance_id) : undefined), [epreuve?.distance_id])
   const participations = useParticipations(id)
   const inscriptions = useInscriptions(epreuve?.competition_id)
   const athletes = useAthletes()
@@ -204,7 +237,7 @@ export function CoursePage() {
       athlete_id: athleteId,
       contexte: 'competition',
       seance_entrainement_id: null,
-      distance_id: epreuve?.distance_id ?? null,
+      distance_id: course!.distance_id,
       equipement_id: null,
       source: 'saisie_manuelle',
       debute_a: course!.debutee_a ?? course!.prevue_a ?? null,
@@ -241,28 +274,43 @@ export function CoursePage() {
   }
 
   async function supprimer() {
-    if (!confirm('Supprimer cette manche et ses résultats ?')) return
+    if (!confirm('Supprimer cette course et ses résultats ?')) return
     await softDelete('course', course!.id)
     nav(`/epreuves/${course!.epreuve_id}`, { replace: true })
   }
 
   const titre = `${distance?.libelle ?? ''} · ${mancheLabel(course)}`
   const quand = course.debutee_a ? fmtDate(course.debutee_a, true) : course.prevue_a ? `prévue ${fmtDate(course.prevue_a, true)}` : null
-  const resumeManche = [course.numero_course ? `#${course.numero_course}` : '', quand ?? '', course.regle_qualification ?? ''].filter(Boolean).join(' · ')
+  const resumeCourse = [course.numero_course ? `#${course.numero_course}` : '', quand ?? '', course.regle_qualification ?? ''].filter(Boolean).join(' · ')
   const sansResultat = !participations || participations.length === 0
+
+  const details = (
+    <DetailsCourse course={course} longuePiste={piste?.type_piste === 'longue_piste'} patineursEditable={sansResultat} />
+  )
 
   return (
     <Page title={titre} back={retour ? true : `/epreuves/${course.epreuve_id}`}>
       <div className="card">
         <div style={{ fontWeight: 700 }}>{competition?.nom}</div>
-        <small>{[piste?.nom, epreuve?.nom, quand].filter(Boolean).join(' · ')}</small>
+        <small>
+          {[
+            piste?.nom,
+            `Épreuve ${epreuve?.nom ?? distanceEpreuve?.libelle ?? ''}`,
+            course.distance_id !== epreuve?.distance_id ? `course de ${distance?.libelle ?? ''}` : null,
+            quand,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </small>
       </div>
 
-      {/* Une fiche complète par athlète : résultat, tours, détail du temps, vidéo… */}
+      {/* Une fiche complète par athlète : tours, détail du temps, résultat, ressenti/vidéo…
+          Avec un seul athlète, les détails de la course sont intégrés au dernier bloc de sa fiche ;
+          sinon ils restent dans une section à part, puisqu'ils sont communs à tous. */}
       {participations?.map((p) => (
-        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} />
+        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} complement={participations.length === 1 ? details : undefined} />
       ))}
-      {sansResultat && candidats.length === 0 && <Empty>Aucun temps enregistré pour cette manche.</Empty>}
+      {sansResultat && candidats.length === 0 && <Empty>Aucun temps enregistré pour cette course.</Empty>}
 
       {candidats.length > 0 && (
         <div className="card">
@@ -277,53 +325,63 @@ export function CoursePage() {
         </div>
       )}
 
-      <Pliable key={course.id} titre="Détails de la manche" resume={resumeManche || undefined}>
-        <div className="grid2">
-          <Field label="Numéro officiel">
-            <input defaultValue={course.numero_course ?? ''} onBlur={(e) => update('course', course.id, { numero_course: e.target.value || null })} />
-          </Field>
-          {sansResultat ? (
-            <Field label="Patineurs au départ">
-              <NumInput value={course.nb_patineurs} onChange={(v) => update('course', course.id, { nb_patineurs: v })} />
-            </Field>
-          ) : (
-            <Field label="Patineurs au départ" hint="Se modifie dans le résultat ci-dessus">
-              <input className="mono" value={course.nb_patineurs ?? '—'} readOnly />
-            </Field>
-          )}
-        </div>
-        <div className="grid2">
-          <Field label="Heure prévue">
-            <input type="datetime-local" defaultValue={toLocalInput(course.prevue_a)} onBlur={(e) => update('course', course.id, { prevue_a: fromLocalInput(e.target.value) })} />
-          </Field>
-          <Field label="Heure réelle" hint="Renseignée par le premier chrono">
-            <input type="datetime-local" defaultValue={toLocalInput(course.debutee_a)} onBlur={(e) => update('course', course.id, { debutee_a: fromLocalInput(e.target.value) })} />
-          </Field>
-        </div>
-        <Field label="Règle de qualification">
-          <input defaultValue={course.regle_qualification ?? ''} onBlur={(e) => update('course', course.id, { regle_qualification: e.target.value || null })} placeholder="ex. 2 premières + meilleur 3e temps" />
-        </Field>
-        {piste?.type_piste === 'longue_piste' && (
-          <div className="grid2">
-            <Field label="Température (°C)">
-              <NumInput value={course.temperature_c} onChange={(v) => update('course', course.id, { temperature_c: v })} decimal />
-            </Field>
-            <Field label="Vent">
-              <input defaultValue={course.vent ?? ''} onBlur={(e) => update('course', course.id, { vent: e.target.value || null })} />
-            </Field>
-          </div>
-        )}
-        <Field label="État de la glace">
-          <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
-        </Field>
-        <Field label="Commentaire sur la manche">
-          <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />
-        </Field>
-      </Pliable>
+      {participations?.length !== 1 && (
+        <Pliable key={course.id} titre="Détails de la course" resume={resumeCourse || undefined}>
+          {details}
+        </Pliable>
+      )}
 
       <button className="btn-danger btn-block" onClick={supprimer}>
-        Supprimer la manche
+        Supprimer la course
       </button>
     </Page>
+  )
+}
+
+/** Champs propres à la course (communs à tous les patineurs). Le nombre de patineurs au départ se saisit dans le Résultat dès qu'une fiche existe. */
+function DetailsCourse({ course, longuePiste, patineursEditable }: { course: Course; longuePiste: boolean; patineursEditable: boolean }) {
+  return (
+    <>
+      <div className="grid2">
+        <Field label="Numéro officiel">
+          <input defaultValue={course.numero_course ?? ''} onBlur={(e) => update('course', course.id, { numero_course: e.target.value || null })} />
+        </Field>
+        {patineursEditable ? (
+          <Field label="Patineurs au départ">
+            <NumInput value={course.nb_patineurs} onChange={(v) => update('course', course.id, { nb_patineurs: v })} />
+          </Field>
+        ) : (
+          <Field label="Patineurs au départ" hint="Se modifie dans le résultat">
+            <input className="mono" value={course.nb_patineurs ?? '—'} readOnly />
+          </Field>
+        )}
+      </div>
+      {/* Pleine largeur : un champ date + heure natif ne tient pas dans une demi-colonne sur mobile */}
+      <Field label="Heure prévue">
+        <input type="datetime-local" defaultValue={toLocalInput(course.prevue_a)} onBlur={(e) => update('course', course.id, { prevue_a: fromLocalInput(e.target.value) })} />
+      </Field>
+      <Field label="Heure réelle" hint="Renseignée par le premier chrono">
+        <input type="datetime-local" defaultValue={toLocalInput(course.debutee_a)} onBlur={(e) => update('course', course.id, { debutee_a: fromLocalInput(e.target.value) })} />
+      </Field>
+      <Field label="Règle de qualification">
+        <input defaultValue={course.regle_qualification ?? ''} onBlur={(e) => update('course', course.id, { regle_qualification: e.target.value || null })} placeholder="ex. 2 premières + meilleur 3e temps" />
+      </Field>
+      {longuePiste && (
+        <div className="grid2">
+          <Field label="Température (°C)">
+            <NumInput value={course.temperature_c} onChange={(v) => update('course', course.id, { temperature_c: v })} decimal />
+          </Field>
+          <Field label="Vent">
+            <input defaultValue={course.vent ?? ''} onBlur={(e) => update('course', course.id, { vent: e.target.value || null })} />
+          </Field>
+        </div>
+      )}
+      <Field label="État de la glace">
+        <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
+      </Field>
+      <Field label="Commentaire sur la course (officiels, incident…)">
+        <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />
+      </Field>
+    </>
   )
 }

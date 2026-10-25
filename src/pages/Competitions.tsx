@@ -360,7 +360,11 @@ export function CompetitionDetailPage() {
                     {nbT ? ` · ${nbT} tours` : ''}
                   </div>
                   <div className="sub">
-                    {courses.length === 0 ? 'Aucune manche' : courses.map(mancheLabel).join(' → ')}
+                    {courses.length === 0
+                      ? 'Aucune course'
+                      : courses
+                          .map((c) => (c.distance_id !== epreuve.distance_id ? `${mancheLabel(c)} ${allDistances?.find((x) => x.id === c.distance_id)?.libelle ?? ''}` : mancheLabel(c)))
+                          .join(' → ')}
                     {g ? ` · ${g.nom}` : ''}
                     {nbParts ? ` · ${nbParts} chrono${nbParts > 1 ? 's' : ''}` : ''}
                   </div>
@@ -497,7 +501,10 @@ function EpreuveForm({
   const [distanceId, setDistanceId] = useState(distances[0]?.id ?? '')
   const [groupeId, setGroupeId] = useState('')
   const [nom, setNom] = useState('')
-  const [manches, setManches] = useState<'finale' | 'qualif_finale' | 'serie'>('qualif_finale')
+  const [courses, setCourses] = useState<'finale' | 'qualif_finale' | 'serie'>('qualif_finale')
+  // Distance de la qualification quand elle diffère de celle de la finale ('' = même distance).
+  // En InterRégional, l'épreuve du 1500 m se qualifie sur 1000 m.
+  const [distanceQualifId, setDistanceQualifId] = useState('')
 
   useEffect(() => {
     if (!distanceId && distances[0]) setDistanceId(distances[0].id)
@@ -516,11 +523,11 @@ function EpreuveForm({
       ordre,
       commentaire: null,
     })
-    const base = { epreuve_id: ep.id, lettre_finale: null, numero_course: null, prevue_a: null, debutee_a: null, nb_patineurs: null, regle_qualification: null, temperature_c: null, vent: null, etat_glace: null, url_video: null, commentaire: null }
-    if (manches === 'serie') await create('course', { ...base, type_manche: 'serie_unique', ordre_manche: 1 })
-    if (manches === 'finale') await create('course', { ...base, type_manche: 'finale', lettre_finale: 'A', ordre_manche: 1 })
-    if (manches === 'qualif_finale') {
-      await create('course', { ...base, type_manche: 'qualification', ordre_manche: 1 })
+    const base = { epreuve_id: ep.id, distance_id: d.id, lettre_finale: null, numero_course: null, prevue_a: null, debutee_a: null, nb_patineurs: null, regle_qualification: null, temperature_c: null, vent: null, etat_glace: null, url_video: null, commentaire: null }
+    if (courses === 'serie') await create('course', { ...base, type_manche: 'serie_unique', ordre_manche: 1 })
+    if (courses === 'finale') await create('course', { ...base, type_manche: 'finale', lettre_finale: null, ordre_manche: 1 })
+    if (courses === 'qualif_finale') {
+      await create('course', { ...base, distance_id: distanceQualifId || d.id, type_manche: 'qualification', ordre_manche: 1 })
       await create('course', { ...base, type_manche: 'finale', lettre_finale: null, ordre_manche: 2 })
     }
     onDone()
@@ -528,7 +535,7 @@ function EpreuveForm({
 
   return (
     <form className="card" onSubmit={submit}>
-      <Field label="Distance" hint={filtre ?? undefined}>
+      <Field label="Distance de l'épreuve (finale)" hint={filtre ?? undefined}>
         <select value={distanceId} onChange={(e) => setDistanceId(e.target.value)} required>
           {distances.map((d) => (
             <option key={d.id} value={d.id}>
@@ -552,13 +559,27 @@ function EpreuveForm({
           <input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="ex. 500 m (2)" />
         </Field>
       </div>
-      <Field label="Manches à créer" hint="Tu pourras en ajouter ou en retirer ensuite.">
-        <select value={manches} onChange={(e) => setManches(e.target.value as typeof manches)}>
+      <Field label="Courses à créer" hint="Tu pourras en ajouter ou en retirer ensuite.">
+        <select value={courses} onChange={(e) => setCourses(e.target.value as typeof courses)}>
           <option value="qualif_finale">Qualification + finale</option>
           <option value="finale">Finale directe</option>
           <option value="serie">Série unique (contre-la-montre)</option>
         </select>
       </Field>
+      {courses === 'qualif_finale' && (
+        <Field label="Distance de la qualification" hint="Si elle diffère de la finale (ex. 1500 m qualifié sur 1000 m).">
+          <select value={distanceQualifId} onChange={(e) => setDistanceQualifId(e.target.value)}>
+            <option value="">Même distance que la finale</option>
+            {distances
+              .filter((x) => x.id !== distanceId)
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.libelle}
+                </option>
+              ))}
+          </select>
+        </Field>
+      )}
       <div className="actions">
         <button className="btn-primary">Ajouter l'épreuve</button>
         <button type="button" onClick={onDone}>
