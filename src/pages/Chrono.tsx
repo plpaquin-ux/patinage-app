@@ -10,6 +10,7 @@ import {
   useCompetitions,
   useCourses,
   useDistances,
+  useDistancesToutes,
   useEpreuves,
   usePistes,
   useSeances,
@@ -211,6 +212,7 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
   const courses = useCourses(epreuveId || undefined)
   const seances = useSeances(athleteId || null)
   const distances = useDistances()
+  const toutesDistances = useDistancesToutes()
 
   useEffect(() => {
     if (!athleteId && athletes && athletes.length > 0) setAthleteId(athletes[0].id)
@@ -241,7 +243,7 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
     else if (e) setDistanceId(e.distance_id)
   }, [mode, epreuveId, courseId, courses, epreuves])
 
-  const distance: Distance | undefined = useMemo(() => distances?.find((d) => d.id === distanceId), [distances, distanceId])
+  const distance: Distance | undefined = useMemo(() => toutesDistances?.find((d) => d.id === distanceId), [toutesDistances, distanceId])
 
   // Longueur du tour : compétition > circuit > piste (compétition) ; saisie libre (entraînement)
   useEffect(() => {
@@ -348,7 +350,7 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
                 <option value="">— Choisir —</option>
                 {epreuves?.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.nom ?? distances?.find((d) => d.id === e.distance_id)?.libelle ?? 'Épreuve'}
+                    {e.nom ?? toutesDistances?.find((d) => d.id === e.distance_id)?.libelle ?? 'Épreuve'}
                   </option>
                 ))}
               </select>
@@ -365,7 +367,7 @@ function Setup({ onArm }: { onArm: (c: StopwatchContext) => void }) {
                 <option value="">— Choisir —</option>
                 {courses?.map((c) => {
                   const ep = epreuves?.find((x) => x.id === c.epreuve_id)
-                  const dc = c.distance_id !== ep?.distance_id ? distances?.find((d) => d.id === c.distance_id)?.libelle : null
+                  const dc = c.distance_id !== ep?.distance_id ? toutesDistances?.find((d) => d.id === c.distance_id)?.libelle : null
                   return (
                     <option key={c.id} value={c.id}>
                       {mancheLabel(c)}

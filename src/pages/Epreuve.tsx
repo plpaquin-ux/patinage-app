@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Empty, Field, Page } from '../components/Layout'
 import { db } from '../lib/db'
-import { useAthletes, useCircuitDistances, useCourse, useCourses, useDistances, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
+import { useAthletes, useCircuitDistances, useCourse, useCourses, useDistances, useDistancesToutes, useEpreuve, useInscriptions, useParticipations } from '../lib/hooks'
 import { alive, create, softDelete, update } from '../lib/repo'
 import { fmtDate, fmtLongueur, fmtMs, fromLocalInput, longueurPiste, nbToursAttendus, retenu, toLocalInput } from '../lib/time'
 import { LIBELLES, mancheLabel, type Course, type Distance, type TypeManche } from '../lib/types'
@@ -20,6 +20,7 @@ export function EpreuvePage() {
   const distance = useLiveQuery(() => (epreuve ? db.distance.get(epreuve.distance_id) : undefined), [epreuve?.distance_id])
   const courses = useCourses(id)
   const allDistances = useDistances()
+  const toutesDistances = useDistancesToutes()
   const liens = useCircuitDistances()
   const longueurE = longueurPiste(competition, circuitE, pisteE)
   const nbToursE = nbToursAttendus(distance?.metres, longueurE, distance?.nb_tours_defaut)
@@ -95,7 +96,7 @@ export function EpreuvePage() {
               <div className="grow">
                 <div className="title">
                   {mancheLabel(course)}
-                  {course.distance_id !== epreuve.distance_id ? ` · ${allDistances?.find((d) => d.id === course.distance_id)?.libelle ?? ''}` : ''}
+                  {course.distance_id !== epreuve.distance_id ? ` · ${toutesDistances?.find((d) => d.id === course.distance_id)?.libelle ?? ''}` : ''}
                   {course.numero_course ? ` · #${course.numero_course}` : ''}
                 </div>
                 <div className="sub">
@@ -119,8 +120,17 @@ export function EpreuvePage() {
         ))}
       </ul>
 
-      <button className="btn-danger btn-block" onClick={supprimer} style={{ marginTop: 16 }}>
-        Supprimer l'épreuve
+      <h3 style={{ marginTop: 18 }}>Détails de l'épreuve</h3>
+      <div className="card">
+        <Field label="Nom (facultatif)" hint="Par défaut, la distance">
+          <input defaultValue={epreuve.nom ?? ''} placeholder={distance?.libelle ?? ''} onBlur={(e) => update('epreuve', epreuve.id, { nom: e.target.value.trim() || null })} />
+        </Field>
+        <Field label="Commentaire sur l'épreuve">
+          <textarea defaultValue={epreuve.commentaire ?? ''} onBlur={(e) => update('epreuve', epreuve.id, { commentaire: e.target.value || null })} />
+        </Field>
+      </div>
+      <button className="btn-danger btn-block" onClick={supprimer}>
+        Supprimer l'épreuve et ses courses
       </button>
     </Page>
   )
@@ -274,7 +284,14 @@ export function CoursePage() {
   }
 
   async function supprimer() {
-    if (!confirm('Supprimer cette course et ses résultats ?')) return
+    if (!confirm(sansResultat ? 'Supprimer cette course ?' : 'Supprimer cette course et le résultat qu\'elle contient ?')) return
+    // Résultats (participation + chrono + tours) supprimés avec la course, sinon ils resteraient orphelins dans l'historique
+    for (const p of participations ?? []) {
+      const tours = alive(await db.tour.where('chrono_id').equals(p.chrono_id).toArray())
+      for (const t of tours) await softDelete('tour', t.id)
+      await softDelete('chrono', p.chrono_id)
+      await softDelete('participation', p.id)
+    }
     await softDelete('course', course!.id)
     nav(`/epreuves/${course!.epreuve_id}`, { replace: true })
   }
@@ -308,7 +325,7 @@ export function CoursePage() {
           Avec un seul athlète, les détails de la course sont intégrés au dernier bloc de sa fiche ;
           sinon ils restent dans une section à part, puisqu'ils sont communs à tous. */}
       {participations?.map((p) => (
-        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} complement={participations.length === 1 ? details : undefined} />
+        <ChronoFiche key={p.id} chronoId={p.chrono_id} contexte={false} complement={participations.length === 1 ? details : undefined} supprimable={participations.length > 1} />
       ))}
       {sansResultat && candidats.length === 0 && <Empty>Aucun temps enregistré pour cette course.</Empty>}
 
@@ -332,7 +349,7 @@ export function CoursePage() {
       )}
 
       <button className="btn-danger btn-block" onClick={supprimer}>
-        Supprimer la course
+        Supprimer la course{sansResultat ? '' : ' et son résultat'}
       </button>
     </Page>
   )
@@ -342,6 +359,24 @@ export function CoursePage() {
 function DetailsCourse({ course, longuePiste, patineursEditable }: { course: Course; longuePiste: boolean; patineursEditable: boolean }) {
   return (
     <>
+      <div className="grid2">
+        <Field label="Type de course">
+          <select value={course.type_manche} onChange={(e) => update('course', course.id, { type_manche: e.target.value as TypeManche })}>
+            {(Object.keys(LIBELLES.type_manche) as TypeManche[]).map((t) => (
+              <option key={t} value={t}>
+                {LIBELLES.type_manche[t]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {course.type_manche === 'finale' ? (
+          <Field label="Finale (A, B, C…)" hint="Les médailles ne comptent qu'en finale A">
+            <input defaultValue={course.lettre_finale ?? ''} maxLength={2} placeholder="A" onBlur={(e) => update('course', course.id, { lettre_finale: e.target.value.trim().toUpperCase() || null })} />
+          </Field>
+        ) : (
+          <div />
+        )}
+      </div>
       <div className="grid2">
         <Field label="Numéro officiel">
           <input defaultValue={course.numero_course ?? ''} onBlur={(e) => update('course', course.id, { numero_course: e.target.value || null })} />
@@ -379,7 +414,7 @@ function DetailsCourse({ course, longuePiste, patineursEditable }: { course: Cou
       <Field label="État de la glace">
         <input defaultValue={course.etat_glace ?? ''} onBlur={(e) => update('course', course.id, { etat_glace: e.target.value || null })} />
       </Field>
-      <Field label="Commentaire sur la course (officiels, incident…)">
+      <Field label="Commentaire sur la course (déroulement, officiels, incident…)">
         <textarea defaultValue={course.commentaire ?? ''} onBlur={(e) => update('course', course.id, { commentaire: e.target.value || null })} />
       </Field>
     </>

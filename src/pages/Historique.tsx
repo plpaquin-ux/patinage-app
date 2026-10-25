@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Chart } from '../components/Chart'
 import { Empty, Page } from '../components/Layout'
 import { db } from '../lib/db'
-import { getDefaultAthleteId, useAthletes, useDistances } from '../lib/hooks'
+import { getDefaultAthleteId, useAthletes, useDistancesToutes } from '../lib/hooks'
 import { alive } from '../lib/repo'
 import { fmtDate, fmtDelta, fmtLongueur, fmtMs, longueurPiste, retenu } from '../lib/time'
 import { LIBELLES, mancheLabel, type Chrono, type Course, type Participation, type TypePiste } from '../lib/types'
@@ -28,7 +28,7 @@ export default function HistoriquePage() {
   const [distanceId, setDistanceId] = useState('')
   const [inclureEntrainement, setInclureEntrainement] = useState(false)
   const [longueurFiltre, setLongueurFiltre] = useState<number | 'toutes'>('toutes')
-  const distances = useDistances(typePiste)
+  const distances = useDistancesToutes(typePiste)
 
   useEffect(() => {
     if (!athleteId && athletes?.[0]) setAthleteId(athletes[0].id)

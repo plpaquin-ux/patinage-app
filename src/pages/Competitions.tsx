@@ -10,6 +10,7 @@ import {
   useCompetition,
   useCompetitions,
   useDistances,
+  useDistancesToutes,
   useEpreuves,
   useGroupes,
   useInscriptions,
@@ -244,6 +245,7 @@ export function CompetitionDetailPage() {
   const athletes = useAthletes()
   const liens = useCircuitDistances()
   const allDistances = useDistances()
+  const toutesDistances = useDistancesToutes()
   // Distances proposées : programme du circuit si défini, sinon celles du type de piste, sinon toutes
   const distancesCircuit = useMemo(() => {
     if (!allDistances) return []
@@ -347,7 +349,7 @@ export function CompetitionDetailPage() {
       {resume && resume.length === 0 && !showEpreuve && <Empty>Ajoute les distances au programme (500 m, 1000 m…).</Empty>}
       <ul className="list">
         {resume?.map(({ epreuve, courses, nbParts, best }) => {
-          const d = allDistances?.find((x) => x.id === epreuve.distance_id)
+          const d = toutesDistances?.find((x) => x.id === epreuve.distance_id)
           const g = groupes?.find((x) => x.id === epreuve.groupe_id)
           const nbT = nbToursAttendus(d?.metres, comp.longueur_piste_m ?? circuit?.longueur_piste_m, d?.nb_tours_defaut)
           return (
@@ -363,7 +365,7 @@ export function CompetitionDetailPage() {
                     {courses.length === 0
                       ? 'Aucune course'
                       : courses
-                          .map((c) => (c.distance_id !== epreuve.distance_id ? `${mancheLabel(c)} ${allDistances?.find((x) => x.id === c.distance_id)?.libelle ?? ''}` : mancheLabel(c)))
+                          .map((c) => (c.distance_id !== epreuve.distance_id ? `${mancheLabel(c)} ${toutesDistances?.find((x) => x.id === c.distance_id)?.libelle ?? ''}` : mancheLabel(c)))
                           .join(' → ')}
                     {g ? ` · ${g.nom}` : ''}
                     {nbParts ? ` · ${nbParts} chrono${nbParts > 1 ? 's' : ''}` : ''}

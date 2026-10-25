@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Empty, Field, Page } from '../components/Layout'
 import { db } from '../lib/db'
-import { useAthletes, useChronosSeance, useDistances, usePistes, useSeance, useSeances } from '../lib/hooks'
+import { useAthletes, useChronosSeance, useDistancesToutes, usePistes, useSeance, useSeances } from '../lib/hooks'
 import { softDelete, update } from '../lib/repo'
 import { fmtDate, fmtMs, fromLocalInput, retenu, toLocalInput } from '../lib/time'
 import { Ressenti } from '../components/ChronoFiche'
@@ -53,7 +53,7 @@ export function SeancePage() {
   const chronos = useChronosSeance(id)
   const athletes = useAthletes()
   const pistes = usePistes()
-  const distances = useDistances()
+  const distances = useDistancesToutes()
 
   if (seance === undefined) return <Page title="Séance" back="/entrainement">…</Page>
   if (!seance) {
