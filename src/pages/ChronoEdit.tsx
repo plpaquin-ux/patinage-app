@@ -1,16 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ChronoFiche } from '../components/ChronoFiche'
 import { Empty, Page } from '../components/Layout'
 import { db } from '../lib/db'
 import { useChrono } from '../lib/hooks'
-import { mancheLabel } from '../lib/types'
-
 
 /**
- * Page /chrono/:id : fiche d'un chrono seul. Sert aux chronos d'entraînement et aux liens
- * profonds (accueil, historique, tableau de bord). En compétition, la fiche est intégrée à la
- * page de la manche (/courses/:id), où l'on arrive directement après un chrono.
+ * Page /chrono/:id : fiche d'un chrono d'entraînement. Un chrono de compétition n'a qu'un seul
+ * écran, la page de sa manche (/courses/:id) : les liens profonds (accueil, historique,
+ * tableau de bord, saisie rapide) y sont redirigés, avec un retour vers la page d'origine.
  */
 export default function ChronoEditPage() {
   const { id } = useParams()
@@ -18,12 +16,11 @@ export default function ChronoEditPage() {
   const chrono = useChrono(id)
   const distance = useLiveQuery(() => (chrono?.distance_id ? db.distance.get(chrono.distance_id) : undefined), [chrono?.distance_id])
   const participation = useLiveQuery(
-    async () => (id ? (await db.participation.where('chrono_id').equals(id).toArray()).find((p) => !p.deleted_at) : undefined),
+    async () => (id ? ((await db.participation.where('chrono_id').equals(id).toArray()).find((p) => !p.deleted_at) ?? null) : undefined),
     [id],
   )
-  const course = useLiveQuery(() => (participation ? db.course.get(participation.course_id) : undefined), [participation?.course_id])
 
-  if (chrono === undefined) return <Page title="Chrono" back>…</Page>
+  if (chrono === undefined || participation === undefined) return <Page title="Chrono" back>…</Page>
   if (!chrono || chrono.deleted_at) {
     return (
       <Page title="Chrono" back>
@@ -31,9 +28,10 @@ export default function ChronoEditPage() {
       </Page>
     )
   }
+  if (participation) return <Navigate to={`/courses/${participation.course_id}`} replace state={{ retour: true, chronoId: chrono.id }} />
 
-  const titre = course ? `${distance?.libelle ?? 'Course'} · ${mancheLabel(course)}` : `Entraînement${distance ? ` · ${distance.libelle}` : ''}`
-  const back = course ? `/courses/${course.id}` : chrono.seance_entrainement_id ? `/entrainement/${chrono.seance_entrainement_id}` : '/'
+  const titre = `Entraînement${distance ? ` · ${distance.libelle}` : ''}`
+  const back = chrono.seance_entrainement_id ? `/entrainement/${chrono.seance_entrainement_id}` : '/'
 
   return (
     <Page title={titre} back={back}>
