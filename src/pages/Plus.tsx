@@ -299,7 +299,7 @@ export function PistesPage() {
         Intérieur
       </label>
       <Field label="Commentaire">
-        <input value={f.commentaire} onChange={(e) => setF({ ...f, commentaire: e.target.value })} placeholder="ex. glace rapide, stationnement…" />
+        <textarea value={f.commentaire} onChange={(e) => setF({ ...f, commentaire: e.target.value })} placeholder="ex. glace rapide, stationnement…" />
       </Field>
       <div className="actions">
         <button className="btn-primary">{editId ? 'Enregistrer' : 'Ajouter'}</button>

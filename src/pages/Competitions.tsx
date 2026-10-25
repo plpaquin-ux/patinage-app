@@ -415,8 +415,8 @@ export function CompetitionDetailPage() {
                 <NumInput value={ins.points_total} onChange={(v) => update('inscription_competition', ins.id, { points_total: v })} decimal />
               </Field>
             </div>
-            <Field label="Commentaire">
-              <input defaultValue={ins.commentaire ?? ''} onBlur={(e) => update('inscription_competition', ins.id, { commentaire: e.target.value || null })} />
+            <Field label="Commentaire sur la compétition">
+              <textarea defaultValue={ins.commentaire ?? ''} onBlur={(e) => update('inscription_competition', ins.id, { commentaire: e.target.value || null })} />
             </Field>
           </div>
         )

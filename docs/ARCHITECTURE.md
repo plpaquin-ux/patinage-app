@@ -1,7 +1,7 @@
 # Patinage – Suivi de performance : état de l'application
 
 > Document de référence, **à mettre à jour à chaque modification** (voir `CLAUDE.md`).
-> Dernière mise à jour : 2026-10-25 (retouches épreuve / course : libellés, lettre de finale, commentaires, suppression). Version déployée : https://plpaquin-ux.github.io/patinage-app/
+> Dernière mise à jour : 2026-10-25 (commentaires multilignes partout). Version déployée : https://plpaquin-ux.github.io/patinage-app/
 
 ## 1. Objectif
 
@@ -174,6 +174,7 @@ compte ─┬─ compte_membre (user_id, role: proprietaire | editeur | lecteur)
 | 2026-10-21 | Page publique : « Podiums » remplacé par « Meilleur classement » (rang final), médailles limitées aux finales A |
 | 2026-10-21 | Page publique de partage (`/partage/:jeton`) : portrait, records, évolution, courses par compétition, lecteur YouTube en modale ; liens gérés dans Plus › Athlètes ; champ vidéo dans la saisie rapide |
 | 2026-10-24 | **Incident en compétition** : `compte_id` périmé en `localStorage` → toutes les écritures refusées par le RLS, file de sync purgée après 5 tentatives (données intactes sur le téléphone seulement). Correctifs : trigger `fn_corriger_compte` (migration 8) ; la file ne jette plus rien ; bouton « Renvoyer les données locales » |
+| 2026-10-25 | Tous les champs « Commentaire » sont des zones multilignes (résultat de compétition, arénas, saisie rapide) |
 | 2026-10-25 | Retouches : libellés des épreuves retrouvés même si la distance est inactive (`useDistancesToutes` ; les 400/500/1000/1500 m CP laissés inactifs par la fusion du matin ont été réactivés) ; type de course et lettre de finale modifiables dans les détails de la course ; nom et commentaire de l'épreuve ; un seul bouton « Supprimer la course et son résultat » (le résultat suit la course) ; commentaire de l'athlète et commentaire de la course distingués |
 | 2026-10-25 | **Distance par course** (migration 11) : `course.distance_id`, formulaire d'épreuve avec distance de qualification, distance par course dans l'épreuve / le chrono / la saisie rapide, portrait regroupé par distance d'épreuve ; « manche » → « course » dans toute l'interface. Données du 24 oct. restructurées : 1500 m = qualif 1000 m + finale ; courses vides supprimées |
 | 2026-10-25 | Fiche de chrono réordonnée : tours → détail du temps → *Résultat* (un seul bloc) → ressenti/vidéo/commentaire + détails de la manche (un seul athlète). `.grid2` à colonnes `minmax(0, 1fr)` ; champs date-heure en pleine largeur |
