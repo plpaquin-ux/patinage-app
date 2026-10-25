@@ -10,7 +10,7 @@ import { isOnline } from '../lib/supabase'
 import { reenvoyerTout, resetPullMarkers, syncNow } from '../lib/sync'
 import { fmtDate, fmtLongueur } from '../lib/time'
 import { LIBELLES, type Circuit, type Piste, type Saison, type TypeCourse, type TypePiste } from '../lib/types'
-import { NumInput } from './ChronoEdit'
+import { NumInput } from '../components/ChronoFiche'
 
 export function PlusPage() {
   const { compte, comptes, session, signOut, selectCompte } = useAuth()

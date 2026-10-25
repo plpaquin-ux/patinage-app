@@ -17,7 +17,7 @@ import {
 } from '../lib/hooks'
 import { fmtLongueur, fmtMs, longueurPiste, nbToursAttendus, todayIsoDate } from '../lib/time'
 import { LIBELLES, mancheLabel, type StatutResultat, type TypeManche, type TypePiste } from '../lib/types'
-import { NumInput } from './ChronoEdit'
+import { NumInput } from '../components/ChronoFiche'
 
 /**
  * Saisie rapide d'un résultat passé (sans chrono) : crée au besoin la compétition,

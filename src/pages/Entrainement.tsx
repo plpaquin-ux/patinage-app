@@ -5,7 +5,7 @@ import { db } from '../lib/db'
 import { useAthletes, useChronosSeance, useDistances, usePistes, useSeance, useSeances } from '../lib/hooks'
 import { softDelete, update } from '../lib/repo'
 import { fmtDate, fmtMs, fromLocalInput, retenu, toLocalInput } from '../lib/time'
-import { Ressenti } from './ChronoEdit'
+import { Ressenti } from '../components/ChronoFiche'
 
 export function EntrainementsPage() {
   const seances = useSeances()
